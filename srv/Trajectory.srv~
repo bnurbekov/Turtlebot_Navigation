@@ -1,0 +1,5 @@
+geometry_msgs/PoseWithCovarianceStamped initPos
+geometry_msgs/PoseStamped goalPos
+nav_msgs/OccupancyGrid map
+---
+nav_msgs/Path path

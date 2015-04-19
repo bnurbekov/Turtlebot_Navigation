@@ -22,12 +22,15 @@ class PriorityQueue:
 
 #Class that implements grid.
 class Grid:
-    def __init__(self, data, height, width, resolution, cellOriginX, cellOriginY):
+    def __init__(self, data, height, width, resolution, origin):
         self.height = height
         self.width = width
         self.resolution = resolution
-        self.cellOriginX = cellOriginX
-        self.cellOriginY = cellOriginY
+        self.origin = origin
+
+        (x, y) = origin
+        self.cellOriginX = x + resolution/2
+        self.cellOriginY = y + resolution/2
 
         self.data = []
 
@@ -287,56 +290,30 @@ def processOccupancyGrid(gridMessage):
     gridHeight = gridMessage.info.height
     gridWidth = gridMessage.info.width
     gridResolution = gridMessage.info.resolution
-    cellOriginX = gridMessage.info.origin.position.x + gridResolution/2
-    cellOriginY = gridMessage.info.origin.position.y + gridResolution/2
 
-    grid = Grid(originalGridMessage.data, gridHeight, gridWidth, gridResolution, cellOriginX, cellOriginY)
+    grid = Grid(originalGridMessage.data, gridHeight, gridWidth, gridResolution, (gridMessage.info.origin.position.x,
+                                                                                  gridMessage.info.origin.position.y))
     grid.scaleMap(0.15)
     grid.expandObstacles()
 
     return grid
 
 #Callback function that processes the initial position received.
-def processInitPos(initPos):
-    global wasInitPosReceived
-    global initPosCell
+def convertPointToCell(point, gridOrigin, resolution):
+    (gridOriginX, gridOriginY) = gridOrigin
 
-    initPosCellX = (initPos.pose.pose.position.x - originalGridMessage.info.origin.position.x) // grid.resolution
-    initPosCellY = (initPos.pose.pose.position.y - originalGridMessage.info.origin.position.y) // grid.resolution
-
-    print "Initial cell: X(%f), Y(%f)" % (initPosCellX, initPosCellY)
-
-    tempCell = (initPosCellX, initPosCellY)
-
-    if not wasInitPosReceived:
-        if not grid.isWithinBoard(tempCell):
-            raise Exception("Error: The position selected was outside of the grid! Please, try again.")
-        else:
-            #we can store the init pos as the global variable
-            initPosCell = tempCell
-            wasInitPosReceived = True
-
-#Callback function that processes the initial position received.
-def processGoalPos(goalPos):
-    global wasGoalPosReceived
-    global goalPosCell
-
-    goalPosCellX = (goalPos.pose.position.x - originalGridMessage.info.origin.position.x) // grid.resolution
-    goalPosCellY = (goalPos.pose.position.y - originalGridMessage.info.origin.position.y) // grid.resolution
-
-    print "Goal cell: X(%f), Y(%f)" % (goalPosCellX, goalPosCellY)
+    goalPosCellX = (point.pose.position.x - gridOriginX) // resolution
+    goalPosCellY = (point.pose.position.y - gridOriginY) // resolution
 
     tempCell = (goalPosCellX, goalPosCellY)
 
-    if not wasGoalPosReceived:
-        if not grid.isWithinBoard(tempCell):
-            raise Exception("Error: The position selected was outside of the grid! Please, try again.")
-        else:
-            goalPosCell = tempCell
-            wasGoalPosReceived = True
+    if not grid.isWithinBoard(tempCell):
+        raise Exception("Error: The position selected was outside of the grid! Please, try again.")
+
+    return tempCell
 
 #Converts cells to points
-def createPoint(cell):
+def convertCellToPoint(cell):
     (x, y) = cell
 
     point = Point()
@@ -351,10 +328,10 @@ def publishGridCells(frontier, expanded):
     expandedGridCells = createGridCellsMessage()
 
     for cell in frontier.elements:
-        frontierGridCells.cells.append(createPoint(cell))
+        frontierGridCells.cells.append(convertCellToPoint(cell))
 
     for cell in expanded:
-        expandedGridCells.cells.append(createPoint(cell))
+        expandedGridCells.cells.append(convertCellToPoint(cell))
 
     frontier_cell_pub.publish(frontierGridCells)
     expanded_cell_pub.publish(expandedGridCells)
@@ -378,7 +355,7 @@ def publishPath(path):
     pathGridCells = createGridCellsMessage()
 
     for cell in path:
-        pathGridCells.cells.append(createPoint(cell))
+        pathGridCells.cells.append(convertCellToPoint(cell))
 
     path_cell_pub.publish(pathGridCells)
 
@@ -390,13 +367,13 @@ def handleRequest(req):
 
     grid = processOccupancyGrid(originalGridMessage)
 
-    processInitPos(req.initPos)
-    processGoalPos(req.goalPos)
+    startCell = convertCellToPoint(req.initPos, grid.origin, grid.resolution)
+    goalCell = convertCellToPoint(req.goalPos, grid.origin, grid.resolution)
 
-    pathFinder = PathFinder(initPosCell, goalPosCell)
+    pathFinder = PathFinder(startCell, goalCell)
 
-    if (initPosCell == goalPosCell):
-        pathFinder.waypoints.append(goalPosCell)
+    if (startCell == goalCell):
+        pathFinder.waypoints.append(goalCell)
     else:
         aStarDone = False
 
@@ -431,12 +408,10 @@ def handleRequest(req):
 def resetVariables():
     global wasInitPosReceived
     global wasGoalPosReceived
-    global aStarDone
     global grid
 
     wasInitPosReceived = False
     wasGoalPosReceived = False
-    aStarDone = False
     #
     # del waypoints[:]
     # waypoints = []
@@ -450,34 +425,17 @@ if __name__ == '__main__':
     # Change this node name to include your username
     rospy.init_node('path_planner')
 
-    global unexplored_cell_pub
     global expanded_cell_pub
     global frontier_cell_pub
-    global wasInitPosReceived
-    global wasGoalPosReceived
-    global frontierList
-    global aStarDone
-    global debugMode
-
-    frontierList = []
-    wasInitPosReceived = False
-    wasGoalPosReceived = False
-    aStarDone = False
-    debugMode = True
 
     expanded_cell_pub = rospy.Publisher('/expandedGridCells', GridCells, queue_size=5) # Publisher for commanding robot motion
     frontier_cell_pub = rospy.Publisher('/frontierGridCells', GridCells, queue_size=5) # Publisher for commanding robot motion
     path_cell_pub = rospy.Publisher('/pathGridCells', GridCells, queue_size=5)
-
-    # Use this command to make the program wait for some seconds
-    # rospy.sleep(rospy.Duration(1, 0))
 
     print "Starting..."
 
     s = rospy.Service('calculateTrajectory', Trajectory, handleRequest)
     print "Service is active now!"
     rospy.spin()
-
-    # wait for some time to make sure that subscribers get the message
 
     print "Complete!"

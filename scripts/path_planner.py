@@ -238,7 +238,7 @@ class PathFinder:
         self.frontier = PriorityQueue()
         self.parent = {}
         self.cost_so_far = {}
-        self.expanded = []
+        self.expanded = set()
 
         self.waypoints = []
         self.path = []
@@ -256,7 +256,7 @@ class PathFinder:
 
         current = self.frontier.get()
         #Add the current node to the list of expanded nodes
-        self.expanded.append(current)
+        self.expanded.add(current)
 
         if current == self.goal:
             return True
@@ -311,7 +311,6 @@ def processOccupancyGrid(gridMessage):
                 (gridMessage.info.origin.position.x, gridMessage.info.origin.position.y))
     grid.scaleMap(4)
     grid.expandObstacles()
-    grid.printToConsole()
 
     return grid
 
@@ -345,9 +344,13 @@ def publishGridCells(frontier, expanded):
     frontierGridCells = createGridCellsMessage()
     expandedGridCells = createGridCellsMessage()
 
+    alreadyPrintedFrontierCells = set()
+
     for tuple in frontier.elements:
         cell = tuple[1]
-        frontierGridCells.cells.append(convertCellToPoint(cell, grid.cellOrigin, grid.resolution))
+        if cell not in expanded and cell not in alreadyPrintedFrontierCells:
+            frontierGridCells.cells.append(convertCellToPoint(cell, grid.cellOrigin, grid.resolution))
+            alreadyPrintedFrontierCells.add(cell)
 
     for cell in expanded:
         expandedGridCells.cells.append(convertCellToPoint(cell, grid.cellOrigin, grid.resolution))

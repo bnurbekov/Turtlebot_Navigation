@@ -37,8 +37,8 @@
       <file leaf-file-name="path_planner.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/scripts/path_planner.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.39297125" vertical-offset="2574" max-vertical-offset="6735">
-              <caret line="188" column="25" selection-start-line="188" selection-start-column="25" selection-end-line="188" selection-end-column="25" />
+            <state vertical-scroll-proportion="0.5101695" vertical-offset="4904" max-vertical-offset="6780">
+              <caret line="350" column="75" selection-start-line="350" selection-start-column="75" selection-end-line="350" selection-end-column="75" />
               <folding>
                 <element signature="e#10072#10120#0" expanded="false" />
               </folding>
@@ -398,8 +398,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/scripts/path_planner.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.39297125" vertical-offset="2574" max-vertical-offset="6735">
-          <caret line="188" column="25" selection-start-line="188" selection-start-column="25" selection-end-line="188" selection-end-column="25" />
+        <state vertical-scroll-proportion="0.5101695" vertical-offset="4904" max-vertical-offset="6780">
+          <caret line="350" column="75" selection-start-line="350" selection-start-column="75" selection-end-line="350" selection-end-column="75" />
           <folding>
             <element signature="e#10072#10120#0" expanded="false" />
           </folding>

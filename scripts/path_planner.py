@@ -31,6 +31,10 @@ class Grid:
         (x, y) = origin
         self.cellOrigin = (x + resolution/2, y + resolution/2)
 
+        #Creates the sets for obstacles and empty cells (for faster obstacle expansion and frontier searching)
+        self.obstacles = set()
+        self.empty = set()
+
         self.data = []
 
         counter = 0
@@ -96,51 +100,103 @@ class Grid:
             return False
 
     #Scales map to a new resolution
-    def scaleMap(self, newResolution):
-        newData = []
+    def scaleMap(self, scaleFactor):
+        ng_data = [] #ng stands for NewGrid
 
-        scaleFactor = newResolution / self.resolution
+        self.obstacles.clear()
+        self.empty.clear()
 
-        newWidth= int(math.ceil(self.width / scaleFactor))
-        newHeight = int(math.ceil(self.height / scaleFactor))
+        if type(scaleFactor) != int:
+            raise Exception("The scale factor should be an integer!")
 
-        for old_y in range(0, newHeight):
-            for old_x in range(0, newWidth):
-                newVal = 0
+        if scaleFactor < 1:
+            raise Exception("New resolution should be larger than the old resolution!")
 
-                for new_y in range(int(old_y * scaleFactor), int(math.ceil((old_y + 1) * scaleFactor))):
-                    for new_x in range(int(old_x * scaleFactor), int(math.ceil((old_x + 1) * scaleFactor))):
-                        oldCellValue = self.getCellValue((old_x, old_y))
+        ng_resolution = self.resolution * scaleFactor
 
-                        if oldCellValue == -1 and newVal < 100:
-                            newData[new_y][new_x] = -1
-                            newVal = -1
-                        elif oldCellValue == 100:
-                            newData[new_y][new_x] = 100
-                            newVal = 100
-                            break
+        #Round up the new width and height
+        ng_width = -(-self.width // scaleFactor)
+        ng_height = -(-self.height // scaleFactor)
 
-                    if newVal == 100:
-                        break
+        ng_row = -1
 
-        self.__init__(newData, newHeight, newWidth, newResolution, self.origin)
+        skip = False
+
+        for i in range(0, self.height):
+            temp_ng_row = i // scaleFactor
+
+            #We do this check in order to make sure that we append only one row per n old cells, where n is the scaleFactor
+            if ng_row != temp_ng_row:
+                ng_row = temp_ng_row
+                ng_data.append([])
+
+            ng_column = -1
+
+            for j in range(0, self.width):
+                temp_ng_column = j // scaleFactor
+
+                #We do this check in order to make sure that we append only one row per n old cells, where n is the scaleFactor
+                if ng_column != temp_ng_column:
+                    ng_column = temp_ng_column
+                    ng_data[ng_row].append(-2) # -2 indicates that the new cell has no value assigned to it yet
+                    skip = False
+
+                if (ng_column, ng_row) in self.obstacles:
+                    skip = True
+
+                if skip:
+                    continue
+
+                currentCellValue = self.getCellValue((j, i))
+
+                ng_oldCellValue = ng_data[ng_row][ng_column]
+
+                if (currentCellValue == CellType.Obstacle):
+                    ng_data[ng_row][ng_column] = CellType.Obstacle
+                    self.obstacles.add((ng_column, ng_row))
+
+                elif (currentCellValue == CellType.Unexplored):
+                    if ng_oldCellValue != CellType.Obstacle:
+                        ng_data[ng_row][ng_column] = CellType.Unexplored
+
+                else: #empty cell
+                    if ng_oldCellValue != CellType.Obstacle and ng_oldCellValue != CellType.Unexplored:
+                        ng_data[ng_row][ng_column] = CellType.Empty
+                        self.empty.add((ng_column, ng_row))
+
+        self.data = ng_data
+        self.height = ng_height
+        self.width = ng_width
+        self.resolution = ng_resolution
+
+        (x, y) = self.origin
+        self.cellOrigin = (x + ng_resolution/2, y + ng_resolution/2)
 
     #Expands the obstacles
     def expandObstacles(self):
-        obstacleCells = []
+        newObstacles = set()
 
-        for i in range(0, self.height):
-            for j in range(0, self.width):
-                cell = (j, i)
-                cellType = grid.getCellValue(cell)
-                if cellType == CellType.Obstacle:
-                    obstacleCells.append(cell)
+        if not self.obstacles: #If the obstacle set is empty, then iterate through the entire map and find obstacles
+            Grid.populateSetWithCells(self, self.obstacles, CellType.Obstacle)
 
-        for obstacleCell in obstacleCells:
-            neighborCells = grid.getNeighbors(obstacleCell)
+        for obstacleCell in self.obstacles:
+            neighborCells = self.getNeighbors(obstacleCell)
 
             for neighborCell in neighborCells:
-                grid.setCellValue(neighborCell, CellType.Obstacle)
+                self.setCellValue(neighborCell, CellType.Obstacle)
+                newObstacles.add(neighborCell)
+
+        self.obstacles = self.obstacles.union(newObstacles)
+
+    #Populates the set with cells that have the given value
+    @staticmethod
+    def populateSetWithCells(grid, set, value):
+        for i in range(0, grid.height):
+            for j in range(0, grid.width):
+                cell = (j, i)
+                cellType = grid.getCellValue(cell)
+                if cellType == value:
+                    set.add(cell)
 
     #Prints the grid (primarily used for debugging).
     def printToConsole(self):
@@ -253,8 +309,9 @@ class CellType:
 def processOccupancyGrid(gridMessage):
     grid = Grid(originalGridMessage.data, gridMessage.info.height, gridMessage.info.width, gridMessage.info.resolution,
                 (gridMessage.info.origin.position.x, gridMessage.info.origin.position.y))
-    grid.scaleMap(0.2)
+    grid.scaleMap(4)
     grid.expandObstacles()
+    grid.printToConsole()
 
     return grid
 

@@ -110,53 +110,29 @@ class Grid:
     #     NEW_GRID_WIDTH= int(math.ceil(GRID_WIDTH / scaleFactor))
     #     NEW_GRID_HEIGHT = int(math.ceil(GRID_HEIGHT / scaleFactor))
     #
-    #     for i in range(0, GRID_HEIGHT):
-    #         for j in range(0, GRID_WIDTH):
-    #             tempCellCoordinateList = []
+    #     for big_y in range(0, NEW_GRID_HEIGHT):
+    #         for big_x in range(0, NEW_GRID_WIDTH):
+    #             tempCell = Cell(CellCoordinate(big_x, big_y), cellType = CellType.Empty)
     #
-    #             j_new = j // scaleFactor
-    #             i_new = i // scaleFactor
-    #             tempCellCoordinate = CellCoordinate(j_new, i_new)
-    #             tempCellCoordinateList.append(tempCellCoordinate)
+    #             for lit_y in range(int(big_y * scaleFactor), int(ceil((big_y + 1) * scaleFactor))):
+    #                 for lit_x in range(int(big_x * scaleFactor), int(ceil((big_x + 1) * scaleFactor))):
+    #                     if grid[CellCoordinate(lit_x, lit_y)].type > tempCell.type: //set type values such that this works
+    #                         tempCell.type = grid[CellCoordinate(lit_x, lit_y)].type
     #
-    #             j_new = j // scaleFactor
-    #             i_new = (i + 1) // scaleFactor
-    #             tempCellCoordinate = CellCoordinate(j_new, i_new)
-    #             tempCellCoordinateList.append(tempCellCoordinate)
+    #             newGrid[tempCell.coordinate] = tempCell
     #
-    #             j_new = (j + 1) // scaleFactor
-    #             i_new = i // scaleFactor
-    #             tempCellCoordinate = CellCoordinate(j_new, i_new)
-    #             tempCellCoordinateList.append(tempCellCoordinate)
+    #     GRID_HEIGHT = NEW_GRID_HEIGHT
+    #     GRID_WIDTH = NEW_GRID_WIDTH
     #
-    #             j_new = (j + 1) // scaleFactor
-    #             i_new = (i + 1) // scaleFactor
-    #             tempCellCoordinate = CellCoordinate(j_new, i_new)
-    #             tempCellCoordinateList.append(tempCellCoordinate)
+    #     grid.clear()
     #
-    #             if grid[CellCoordinate(j, i)].type == CellType.Obstacle:
-    #                 for cellCoordinate in tempCellCoordinateList:
-    #                     if cellCoordinate in newGrid:
-    #                         newGrid[cellCoordinate].type = CellType.Obstacle
-    #                     else:
-    #                         newGrid[cellCoordinate] = Cell(CellCoordinate(j_new, i_new), cellType=CellType.Obstacle)
-    #             else:
-    #                 for cellCoordinate in tempCellCoordinateList:
-    #                     if cellCoordinate not in newGrid:
-    #                         newGrid[cellCoordinate] = Cell(CellCoordinate(j_new, i_new), cellType=CellType.Unexplored)
+    #     grid = newGrid
     #
+    #     GRID_RESOLUTION = newResolution
+    #     cellOriginX = originalGridMessage.info.origin.position.x + GRID_RESOLUTION/2
+    #     cellOriginY = originalGridMessage.info.origin.position.y + GRID_RESOLUTION/2
     #
-    #
-    # GRID_HEIGHT = NEW_GRID_HEIGHT
-    # GRID_WIDTH = NEW_GRID_WIDTH
-    #
-    # grid.clear()
-    #
-    # grid = newGrid
-    #
-    # GRID_RESOLUTION = newResolution
-    # cellOriginX = originalGridMessage.info.origin.position.x + GRID_RESOLUTION/2
-    # cellOriginY = originalGridMessage.info.origin.position.y + GRID_RESOLUTION/2
+
     #
     #
     # #Expands the obstacles

@@ -108,7 +108,6 @@ class Grid:
     #     scaleFactor = newResolution / originalGridMessage.info.resolution
     #
     #     NEW_GRID_WIDTH= int(math.ceil(GRID_WIDTH / scaleFactor))
-    #     NEW_GRID_HEIGHT = int(math.ceil(GRID_HEIGHT / scaleFactor))
     #
     #     for big_y in range(0, NEW_GRID_HEIGHT):
     #         for big_x in range(0, NEW_GRID_WIDTH):
@@ -119,12 +118,16 @@ class Grid:
     #                     if grid[CellCoordinate(lit_x, lit_y)].type > tempCell.type: //set type values such that this works
     #                         tempCell.type = grid[CellCoordinate(lit_x, lit_y)].type
     #
+    #
     #             newGrid[tempCell.coordinate] = tempCell
+    #
     #
     #     GRID_HEIGHT = NEW_GRID_HEIGHT
     #     GRID_WIDTH = NEW_GRID_WIDTH
     #
+    #
     #     grid.clear()
+    #
     #
     #     grid = newGrid
     #
@@ -132,25 +135,6 @@ class Grid:
     #     cellOriginX = originalGridMessage.info.origin.position.x + GRID_RESOLUTION/2
     #     cellOriginY = originalGridMessage.info.origin.position.y + GRID_RESOLUTION/2
     #
-
-    #
-    #
-    # #Expands the obstacles
-    # def expandObstacles():
-    #     obstacleCells = []
-    #
-    #     for cellKey in grid:
-    #         cell = grid[cellKey]
-    #         if cell.type == CellType.Obstacle:
-    #             obstacleCells.append(cell)
-    #
-    #     for obstacleCell in obstacleCells:
-    #         for i in range(0, 3):
-    #             for j in range(0, 3):
-    #                 neigborCellCoordinate = CellCoordinate((obstacleCell.coordinate.x - 1) + j, (obstacleCell.coordinate.y - 1) + i)
-    #
-    #                 if (obstacleCell.coordinate.isValidNeighbor(neigborCellCoordinate)):
-    #                     grid[neigborCellCoordinate].type = CellType.Obstacle
 
     #Prints the grid (primarily used for debugging).
     def printToConsole(self):

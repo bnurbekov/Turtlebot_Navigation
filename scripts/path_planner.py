@@ -29,8 +29,7 @@ class Grid:
         self.origin = origin
 
         (x, y) = origin
-        self.cellOriginX = x + resolution/2
-        self.cellOriginY = y + resolution/2
+        self.cellOrigin = (x + resolution/2, y + resolution/2)
 
         self.data = []
 
@@ -182,7 +181,7 @@ class Grid:
         for i in range(0, self.height):
             for j in range(0, self.width):
                 cell = (j, self.height - 1 - i)
-                print grid.getCellValue(cell),
+                print self.getCellValue(cell),
             print " "
 
 
@@ -287,12 +286,8 @@ class CellType:
 
 #Processes the received occupancy grid message.
 def processOccupancyGrid(gridMessage):
-    gridHeight = gridMessage.info.height
-    gridWidth = gridMessage.info.width
-    gridResolution = gridMessage.info.resolution
-
-    grid = Grid(originalGridMessage.data, gridHeight, gridWidth, gridResolution, (gridMessage.info.origin.position.x,
-                                                                                  gridMessage.info.origin.position.y))
+    grid = Grid(originalGridMessage.data, gridMessage.info.height, gridMessage.info.width, gridMessage.info.resolution,
+                (gridMessage.info.origin.position.x, gridMessage.info.origin.position.y))
     grid.scaleMap(0.15)
     grid.expandObstacles()
 
@@ -313,12 +308,13 @@ def convertPointToCell(point, gridOrigin, resolution):
     return tempCell
 
 #Converts cells to points
-def convertCellToPoint(cell):
+def convertCellToPoint(cell, cellOrigin, resolution):
     (x, y) = cell
+    (cellOriginX, cellOriginY) = cellOrigin
 
     point = Point()
-    point.x = grid.cellOriginX + grid.resolution*x
-    point.y = grid.cellOriginY + grid.resolution*y
+    point.x = cellOriginX + resolution*x
+    point.y = cellOriginY + resolution*y
 
     return point
 
@@ -328,10 +324,10 @@ def publishGridCells(frontier, expanded):
     expandedGridCells = createGridCellsMessage()
 
     for cell in frontier.elements:
-        frontierGridCells.cells.append(convertCellToPoint(cell))
+        frontierGridCells.cells.append(convertCellToPoint(cell, grid.cellOrigin, grid.resolution))
 
     for cell in expanded:
-        expandedGridCells.cells.append(convertCellToPoint(cell))
+        expandedGridCells.cells.append(convertCellToPoint(cell, grid.cellOrigin, grid.resolution))
 
     frontier_cell_pub.publish(frontierGridCells)
     expanded_cell_pub.publish(expandedGridCells)
@@ -355,7 +351,7 @@ def publishPath(path):
     pathGridCells = createGridCellsMessage()
 
     for cell in path:
-        pathGridCells.cells.append(convertCellToPoint(cell))
+        pathGridCells.cells.append(convertCellToPoint(cell, grid.cellOrigin, grid.resolution))
 
     path_cell_pub.publish(pathGridCells)
 
@@ -392,33 +388,19 @@ def handleRequest(req):
     path = Path()
     path.poses = []
 
+    (cellOriginX, cellOriginY) = grid.cellOrigin
+
     for cell in pathFinder.waypoints:
         (x, y) = cell
 
         poseObj = PoseStamped()
-        poseObj.pose.position.x = grid.cellOriginX + x * grid.resolution
-        poseObj.pose.position.y = grid.cellOriginY + y * grid.resolution
+        poseObj.pose.position.x = cellOriginX + x * grid.resolution
+        poseObj.pose.position.y = cellOriginY + y * grid.resolution
         poseObj.pose.position.z = 0
 
         path.poses.append(poseObj)
 
     return TrajectoryResponse(path)
-
-#resets all the variables
-def resetVariables():
-    global wasInitPosReceived
-    global wasGoalPosReceived
-    global grid
-
-    wasInitPosReceived = False
-    wasGoalPosReceived = False
-    #
-    # del waypoints[:]
-    # waypoints = []
-    #
-    # grid.clear()
-
-    #TODO: properly reset variables
 
 # This is the program's main function
 if __name__ == '__main__':

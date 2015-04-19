@@ -255,19 +255,22 @@ class PathFinder:
             raise Exception("Was not able to find a path to the destination!")
 
         current = self.frontier.get()
-        #Add the current node to the list of expanded nodes
-        self.expanded.add(current)
 
-        if current == self.goal:
-            return True
+        #priority queue heap can contain duplicates
+        if current not in self.expanded:
+            #Add the current node to the list of expanded nodes
+            self.expanded.add(current)
 
-        for neighbor in grid.getNeighbors(current):
-            new_cost = self.cost_so_far[current] + Grid.getPathCost(current, neighbor)
-            if neighbor not in self.cost_so_far or new_cost < self.cost_so_far[neighbor]:
-                self.cost_so_far[neighbor] = new_cost
-                priority = new_cost + Grid.getHeuristic(neighbor, self.goal)
-                self.frontier.put(neighbor, priority)
-                self.parent[neighbor] = current
+            if current == self.goal:
+                return True
+
+            for neighbor in grid.getNeighbors(current):
+                new_cost = self.cost_so_far[current] + Grid.getPathCost(current, neighbor)
+                if neighbor not in self.cost_so_far or new_cost < self.cost_so_far[neighbor]:
+                    self.cost_so_far[neighbor] = new_cost
+                    priority = new_cost + Grid.getHeuristic(neighbor, self.goal)
+                    self.frontier.put(neighbor, priority)
+                    self.parent[neighbor] = current
 
         return False
 

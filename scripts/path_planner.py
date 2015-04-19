@@ -41,7 +41,7 @@ class Grid:
         while current_index < len(data):
             counter += 1
             current_index = counter * width
-            self.data.append(data[previous_index, current_index])
+            self.data.append(data[previous_index:current_index])
             previous_index = current_index
 
     #Gets the value of the cell from the grid
@@ -174,7 +174,7 @@ class Grid:
 class PathFinder:
     def __init__(self, start, goal):
         self.frontier = PriorityQueue()
-        self.parent_list = {}
+        self.parent = {}
         self.cost_so_far = {}
         self.expanded = []
 
@@ -215,7 +215,7 @@ class PathFinder:
 
         while current != self.start:
             self.path.append(current)
-            current = self.parent_list[current]
+            current = self.parent[current]
 
         self.path.append(current)
         self.path.reverse()
@@ -224,12 +224,12 @@ class PathFinder:
         if len(self.path) <= 1:
             raise Exception("Error: Cannot extract waypoints from the empty path or path that consists of only one coordinate!")
 
-        lastXDiff = self.path[1].x - self.path[0].x
-        lastYDiff = self.path[1].y - self.path[0].y
+        lastXDiff = self.path[1][0] - self.path[0][0]
+        lastYDiff = self.path[1][1] - self.path[0][1]
 
         for i in range(1, len(self.path) - 1):
-            xDiff = self.path[i+1].x - self.path[i].x
-            yDiff = self.path[i+1].y - self.path[i].y
+            xDiff = self.path[i+1][0] - self.path[i][0]
+            yDiff = self.path[i+1][1] - self.path[i][1]
 
             if lastXDiff != xDiff or lastYDiff != yDiff:
                 self.waypoints.append(self.path[i])
@@ -248,8 +248,8 @@ class CellType:
 def processOccupancyGrid(gridMessage):
     grid = Grid(originalGridMessage.data, gridMessage.info.height, gridMessage.info.width, gridMessage.info.resolution,
                 (gridMessage.info.origin.position.x, gridMessage.info.origin.position.y))
-    grid.scaleMap(0.15)
-    grid.expandObstacles()
+    # grid.scaleMap(0.15)
+    # grid.expandObstacles()
 
     return grid
 
@@ -257,12 +257,12 @@ def processOccupancyGrid(gridMessage):
 def convertPointToCell(point, gridOrigin, resolution):
     (gridOriginX, gridOriginY) = gridOrigin
 
-    goalPosCellX = (point.pose.position.x - gridOriginX) // resolution
-    goalPosCellY = (point.pose.position.y - gridOriginY) // resolution
+    goalPosCellX = int((point.x - gridOriginX) // resolution)
+    goalPosCellY = int((point.y - gridOriginY) // resolution)
 
     tempCell = (goalPosCellX, goalPosCellY)
 
-    if not grid.isWithinBoard(tempCell):
+    if not grid.isWithinGrid(tempCell):
         raise Exception("Error: The position selected was outside of the grid! Please, try again.")
 
     return tempCell
@@ -283,7 +283,8 @@ def publishGridCells(frontier, expanded):
     frontierGridCells = createGridCellsMessage()
     expandedGridCells = createGridCellsMessage()
 
-    for cell in frontier.elements:
+    for tuple in frontier.elements:
+        cell = tuple[1]
         frontierGridCells.cells.append(convertCellToPoint(cell, grid.cellOrigin, grid.resolution))
 
     for cell in expanded:
@@ -323,8 +324,8 @@ def handleRequest(req):
 
     grid = processOccupancyGrid(originalGridMessage)
 
-    startCell = convertCellToPoint(req.initPos, grid.origin, grid.resolution)
-    goalCell = convertCellToPoint(req.goalPos, grid.origin, grid.resolution)
+    startCell = convertPointToCell(req.initPos.pose.pose.position, grid.origin, grid.resolution)
+    goalCell = convertPointToCell(req.goalPos.pose.position, grid.origin, grid.resolution)
 
     pathFinder = PathFinder(startCell, goalCell)
 

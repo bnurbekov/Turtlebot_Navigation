@@ -66,7 +66,7 @@ class Grid:
             for j in range(0, 3):
                 neighborCell = (x - 1 + j, y - 1 + i)
 
-                if self.isWithinGrid(neighborCell) and cell != neighborCell:
+                if self.isWithinGrid(neighborCell) and cell != neighborCell and self.getCellValue(neighborCell) != CellType.Obstacle:
                     neighborList.append(neighborCell)
 
         return neighborList
@@ -95,46 +95,52 @@ class Grid:
         else:
             return False
 
-    # def scaleMap(newResolution):
-    #     global grid
-    #     global GRID_HEIGHT
-    #     global GRID_WIDTH
-    #     global GRID_RESOLUTION
-    #     global cellOriginX
-    #     global cellOriginY
-    #
-    #     newGrid = {}
-    #
-    #     scaleFactor = newResolution / originalGridMessage.info.resolution
-    #
-    #     NEW_GRID_WIDTH= int(math.ceil(GRID_WIDTH / scaleFactor))
-    #
-    #     for big_y in range(0, NEW_GRID_HEIGHT):
-    #         for big_x in range(0, NEW_GRID_WIDTH):
-    #             tempCell = Cell(CellCoordinate(big_x, big_y), cellType = CellType.Empty)
-    #
-    #             for lit_y in range(int(big_y * scaleFactor), int(ceil((big_y + 1) * scaleFactor))):
-    #                 for lit_x in range(int(big_x * scaleFactor), int(ceil((big_x + 1) * scaleFactor))):
-    #                     if grid[CellCoordinate(lit_x, lit_y)].type > tempCell.type: //set type values such that this works
-    #                         tempCell.type = grid[CellCoordinate(lit_x, lit_y)].type
-    #
-    #
-    #             newGrid[tempCell.coordinate] = tempCell
-    #
-    #
-    #     GRID_HEIGHT = NEW_GRID_HEIGHT
-    #     GRID_WIDTH = NEW_GRID_WIDTH
-    #
-    #
-    #     grid.clear()
-    #
-    #
-    #     grid = newGrid
-    #
-    #     GRID_RESOLUTION = newResolution
-    #     cellOriginX = originalGridMessage.info.origin.position.x + GRID_RESOLUTION/2
-    #     cellOriginY = originalGridMessage.info.origin.position.y + GRID_RESOLUTION/2
-    #
+    #Scales map to a new resolution
+    def scaleMap(self, newResolution):
+        newData = []
+
+        scaleFactor = newResolution / self.resolution
+
+        newWidth= int(math.ceil(self.width / scaleFactor))
+        newHeight = int(math.ceil(self.height / scaleFactor))
+
+        for old_y in range(0, newHeight):
+            for old_x in range(0, newWidth):
+                newVal = 0
+
+                for new_y in range(int(old_y * scaleFactor), int(math.ceil((old_y + 1) * scaleFactor))):
+                    for new_x in range(int(old_x * scaleFactor), int(math.ceil((old_x + 1) * scaleFactor))):
+                        oldCellValue = self.getCellValue((old_x, old_y))
+
+                        if oldCellValue == -1 and newVal < 100:
+                            newData[new_y][new_x] = -1
+                            newVal = -1
+                        elif oldCellValue == 100:
+                            newData[new_y][new_x] = 100
+                            newVal = 100
+                            break
+
+                    if newVal == 100:
+                        break
+
+        self.__init__(newData, newHeight, newWidth, newResolution, self.origin)
+
+    #Expands the obstacles
+    def expandObstacles(self):
+        obstacleCells = []
+
+        for i in range(0, self.height):
+            for j in range(0, self.width):
+                cell = (j, i)
+                cellType = grid.getCellValue(cell)
+                if cellType == CellType.Obstacle:
+                    obstacleCells.append(cell)
+
+        for obstacleCell in obstacleCells:
+            neighborCells = grid.getNeighbors(obstacleCell)
+
+            for neighborCell in neighborCells:
+                grid.setCellValue(neighborCell, CellType.Obstacle)
 
     #Prints the grid (primarily used for debugging).
     def printToConsole(self):
@@ -200,13 +206,12 @@ class PathFinder:
             return True
 
         for neighbor in grid.getNeighbors(current):
-            if grid.getCellValue(neighbor) != CellType.Obstacle:
-                new_cost = self.cost_so_far[current] + Grid.getPathCost(current, neighbor)
-                if neighbor not in self.cost_so_far or new_cost < self.cost_so_far[neighbor]:
-                    self.cost_so_far[neighbor] = new_cost
-                    priority = new_cost + Grid.getHeuristic(neighbor, self.goal)
-                    self.frontier.put(neighbor, priority)
-                    self.parent[neighbor] = current
+            new_cost = self.cost_so_far[current] + Grid.getPathCost(current, neighbor)
+            if neighbor not in self.cost_so_far or new_cost < self.cost_so_far[neighbor]:
+                self.cost_so_far[neighbor] = new_cost
+                priority = new_cost + Grid.getHeuristic(neighbor, self.goal)
+                self.frontier.put(neighbor, priority)
+                self.parent[neighbor] = current
 
         return False
 
@@ -248,8 +253,8 @@ class CellType:
 def processOccupancyGrid(gridMessage):
     grid = Grid(originalGridMessage.data, gridMessage.info.height, gridMessage.info.width, gridMessage.info.resolution,
                 (gridMessage.info.origin.position.x, gridMessage.info.origin.position.y))
-    # grid.scaleMap(0.15)
-    # grid.expandObstacles()
+    grid.scaleMap(0.2)
+    grid.expandObstacles()
 
     return grid
 

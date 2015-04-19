@@ -62,7 +62,7 @@ class Grid:
 
         for i in range(0, 3):
             for j in range(0, 3):
-                neighborCell = self.data[i - 1 + y][j - 1 + x]
+                neighborCell = (x - 1 + j, y - 1 + i)
 
                 if self.isWithinGrid(neighborCell) and cell != neighborCell:
                     neighborList.append(neighborCell)
@@ -238,12 +238,13 @@ class PathFinder:
             return True
 
         for neighbor in grid.getNeighbors(current):
-            new_cost = self.cost_so_far[current] + Grid.getPathCost(current, neighbor)
-            if neighbor not in self.cost_so_far or new_cost < self.cost_so_far[neighbor]:
-                self.cost_so_far[neighbor] = new_cost
-                priority = new_cost + Grid.getHeuristic(neighbor, self.goal)
-                self.frontier.put(neighbor, priority)
-                self.parent[neighbor] = current
+            if grid.getCellValue(neighbor) != CellType.Obstacle:
+                new_cost = self.cost_so_far[current] + Grid.getPathCost(current, neighbor)
+                if neighbor not in self.cost_so_far or new_cost < self.cost_so_far[neighbor]:
+                    self.cost_so_far[neighbor] = new_cost
+                    priority = new_cost + Grid.getHeuristic(neighbor, self.goal)
+                    self.frontier.put(neighbor, priority)
+                    self.parent[neighbor] = current
 
         return False
 
@@ -423,8 +424,6 @@ def handleRequest(req):
         poseObj.pose.position.z = 0
 
         path.poses.append(poseObj)
-
-    resetVariables()
 
     return TrajectoryResponse(path)
 

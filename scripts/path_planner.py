@@ -96,43 +96,40 @@ class Grid:
         else:
             return False
 
-    # def scaleMap(newResolution):
-    #     global grid
-    #     global GRID_HEIGHT
-    #     global GRID_WIDTH
-    #     global GRID_RESOLUTION
-    #     global cellOriginX
-    #     global cellOriginY
-    #
-    #     newGrid = {}
-    #
-    #     scaleFactor = newResolution / originalGridMessage.info.resolution
-    #
-    #     NEW_GRID_WIDTH= int(math.ceil(GRID_WIDTH / scaleFactor))
-    #     NEW_GRID_HEIGHT = int(math.ceil(GRID_HEIGHT / scaleFactor))
-    #
-    #     for big_y in range(0, NEW_GRID_HEIGHT):
-    #         for big_x in range(0, NEW_GRID_WIDTH):
-    #             tempCell = Cell(CellCoordinate(big_x, big_y), cellType = CellType.Empty)
-    #
-    #             for lit_y in range(int(big_y * scaleFactor), int(ceil((big_y + 1) * scaleFactor))):
-    #                 for lit_x in range(int(big_x * scaleFactor), int(ceil((big_x + 1) * scaleFactor))):
-    #                     if grid[CellCoordinate(lit_x, lit_y)].type > tempCell.type: //set type values such that this works
-    #                         tempCell.type = grid[CellCoordinate(lit_x, lit_y)].type
-    #
-    #             newGrid[tempCell.coordinate] = tempCell
-    #
-    #     GRID_HEIGHT = NEW_GRID_HEIGHT
-    #     GRID_WIDTH = NEW_GRID_WIDTH
-    #
-    #     grid.clear()
-    #
-    #     grid = newGrid
-    #
-    #     GRID_RESOLUTION = newResolution
-    #     cellOriginX = originalGridMessage.info.origin.position.x + GRID_RESOLUTION/2
-    #     cellOriginY = originalGridMessage.info.origin.position.y + GRID_RESOLUTION/2
-    #
+    def scaleMap(newResolution):
+
+        newData = []
+
+        scaleFactor = newResolution / self.resolution
+
+        newWidth= int(math.ceil(self.width / scaleFactor))
+        newHeight = int(math.ceil(self.height / scaleFactor))
+
+        for old_y in range(0, newHeight):
+            for old_x in range(0, newWidth):
+                newVal = 0
+
+                for new_y in range(int(big_y * scaleFactor), int(ceil((big_y + 1) * scaleFactor))):
+                    for new_x in range(int(big_x * scaleFactor), int(ceil((big_x + 1) * scaleFactor))):
+                        if data[old_y][old_x] == -1 and newVal < 100:
+                            newData[new_y][new_x] = -1
+                            newVal = -1
+                        elif data[old_y][old_x] == 100:
+                            newData[new_y][new_x] = 100
+                            newVal = 100
+                            break
+                    if newVal == 100:
+                        break
+
+        self.height = newHeight
+        self.width = newWidth
+
+        data = newData
+
+        self.resolution = newResolution
+        (x, y) = origin
+        origin = (x + newResolution/2, y + newResolution/2)
+
 
     #
     #

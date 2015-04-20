@@ -361,7 +361,6 @@ def publishGridCells(frontier, expanded):
     frontier_cell_pub.publish(frontierGridCells)
     expanded_cell_pub.publish(expandedGridCells)
 
-
 #Creates a GridCells message and auto-initializes some fields.
 def createGridCellsMessage():
     gridCells = GridCells()
@@ -375,7 +374,6 @@ def createGridCellsMessage():
 
     return gridCells
 
-
 def publishPath(path):
     pathGridCells = createGridCellsMessage()
 
@@ -384,14 +382,12 @@ def publishPath(path):
 
     path_cell_pub.publish(pathGridCells)
 
-def handleRequest(req):
-    global originalGridMessage
-    global grid
+def processCostGrid(costGridMessage):
+    #TODO: implement cost grid scaling
+    pass
 
-    originalGridMessage = req.map
-
-    grid = processOccupancyGrid(originalGridMessage)
-
+#TODO: possibly create a new class that will contain this service method
+def getWaypoints(req):
     startCell = convertPointToCell(req.initPos.pose.pose.position, grid.origin, grid.resolution)
     goalCell = convertPointToCell(req.goalPos.pose.position, grid.origin, grid.resolution)
 
@@ -414,8 +410,8 @@ def handleRequest(req):
         pathFinder.calculateWaypoints()
 
     #convert the waypoints to the trajectory offsets:
-    path = Path()
-    path.poses = []
+    waypoints = Path()
+    waypoints.poses = []
 
     (cellOriginX, cellOriginY) = grid.cellOrigin
 
@@ -427,9 +423,108 @@ def handleRequest(req):
         poseObj.pose.position.y = cellOriginY + y * grid.resolution
         poseObj.pose.position.z = 0
 
-        path.poses.append(poseObj)
+        waypoints.poses.append(poseObj)
 
-    return TrajectoryResponse(path)
+#Gets the centroid of the largest frontier
+def getCentroid():
+    visited = set()
+    clusters = []
+
+    for cell in grid.empty:
+        cluster = []
+
+        expandCluster(cell, cluster, visited)
+
+        if len(cluster) != 0:
+            clusters.append(cluster)
+
+    if len(clusters) == 0:
+        raise Exception("Was not able to find any frontiers!")
+    else:
+        #Find the largest cluster in the list of clusters
+        (largestClusterIndex, largestCluster) = max(enumerate(clusters), key = lambda tup: len(tup[1]))
+
+        # maxLengthSoFar = 0
+        #
+        # for cluster in clusters:
+        #     if len(cluster > maxLengthSoFar):
+        #         largestCluster = cluster
+
+        centroid = findCentroid(largestCluster)
+
+    centroidPos = Point()
+    centroidPos.x = centroid[0] + grid.cellOrigin[0]
+    centroidPos.y = centroid[1] + grid.cellOrigin[1]
+    return centroidPos
+
+#Adds the cell to the cluster if the cell is on the border with the unexplored cells and is not visited
+def expandCluster(cell, cluster, visited):
+    if cell in visited:
+        return
+
+    visited.add(cell)
+    possibleClusterCandidates = []
+
+    neighbors = grid.getNeighbors(cell)
+
+    doesCellBelongToCluster = False
+
+    (x, y) = cell
+    for neighbor in neighbors:
+        neighborValue = grid.getCellValue(neighbor)
+        (neighborX, neighborY) = neighbor
+
+        if neighborValue == CellType.Unexplored and (neighborX - x == 0 or neighborY - y == 0):
+            doesCellBelongToCluster = True
+        elif neighborValue == CellType.Empty:
+            possibleClusterCandidates.append(neighbor)
+
+    if doesCellBelongToCluster:
+        #1) Add the cell to the cluster
+        cluster.append(cell)
+        #2) Check if the neighbor empty cells belong to this cluster as well
+        for clusterCandidate in possibleClusterCandidates:
+            expandCluster(clusterCandidate, cluster, visited)
+
+def findCentroid(cluster):
+    centroidX = 0
+    centroidY = 0
+
+    for cell in cluster:
+        (x, y) = cell
+        centroidX += x
+        centroidY += y
+
+    clusterSize = len(cluster)
+
+    centroidX = round(centroidX / clusterSize)
+    centroidY = round(centroidY / clusterSize)
+
+    return (centroidX, centroidY)
+
+def handleRequest(req):
+    global originalGridMessage
+    global grid
+
+    originalGridMessage = req.map
+
+    grid = processOccupancyGrid(originalGridMessage)
+
+    if req.processCostMap:
+        costGrid = processCostGrid(req.costMap)
+
+    waypoints = getWaypoints(req)
+
+    foundCentroid = False
+    if req.returnCentroid:
+        try:
+            centroid = getCentroid(req)
+            foundCentroid = True
+        except:
+            centroid = Point()
+            foundCentroid = False
+
+    return TrajectoryResponse(waypoints, foundCentroid, centroid)
 
 # This is the program's main function
 if __name__ == '__main__':

@@ -251,16 +251,16 @@ def processReceivedMap():
         try:
             previousTrajectory
         except NameError:
-            previousTrajectory = trajectory
+            previousTrajectory = response
             isNewTrajectoryReady = True
         else:
             #Check if the previous trajectory is the same as the received trajectory
-            if previousTrajectory.path.poses != trajectory.path.poses:
+            if previousTrajectory.path.poses != response.path.poses:
                 isNewTrajectoryReady = True
 
 #Requests the trajectory
 def requestTrajectory():
-    global trajectory
+    global response
 
     initPos = PoseWithCovarianceStamped()
     initPos.pose.pose.position.x = current_x
@@ -274,7 +274,7 @@ def requestTrajectory():
 
     try:
         calculateTraj = rospy.ServiceProxy('calculateTrajectory', Trajectory)
-        trajectory = calculateTraj(initPos, goalPos, map)
+        response = calculateTraj(initPos, goalPos, map, True, map, True)
     except rospy.ServiceException, e:
         print "Service call failed: %s" % e
 
@@ -292,7 +292,7 @@ def executeTrajectory():
 
     while not reachedGoal and not rospy.is_shutdown():
         counter = 0
-        oldTrajectoryPoses = trajectory.path.poses
+        oldTrajectoryPoses = response.path.poses
         isNewTrajectoryReady = False
 
         for point in oldTrajectoryPoses:
@@ -328,7 +328,7 @@ if __name__ == "__main__":
     global wasLocalGoalDefined
 
     #Trajectory
-    global trajectory
+    global response
     global tfListener
 
     wasLocalGoalDefined = False

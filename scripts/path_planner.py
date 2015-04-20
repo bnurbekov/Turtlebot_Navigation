@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
-import rospy, math, heapq
+import rospy, math, heapq, Queue, threading
 # Add additional imports for each of the message types used
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped, Point
 from nav_msgs.msg import Odometry, OccupancyGrid, MapMetaData, GridCells, Path
-from lab4.srv import *
+from final_project.srv import *
 
 #Class that implements priority queue.
 class PriorityQueue:
@@ -317,6 +317,11 @@ def processOccupancyGrid(gridMessage):
 
     return grid
 
+def processCostGrid(gridMessage, result_queue):
+    #TODO: add the implementation of this function
+    #return the result using the following: result_queue.put(result)
+    pass
+
 #Callback function that processes the initial position received.
 def convertPointToCell(point, gridOrigin, resolution):
     (gridOriginX, gridOriginY) = gridOrigin
@@ -342,24 +347,13 @@ def convertCellToPoint(cell, cellOrigin, resolution):
 
     return point
 
-#Publishes the grid as GridCells for RViz.
-def publishGridCells(frontier, expanded):
-    frontierGridCells = createGridCellsMessage()
-    expandedGridCells = createGridCellsMessage()
+def publishGridCells(publisher, gridCellList):
+    gridCellsMessage = createGridCellsMessage()
 
-    alreadyPrintedFrontierCells = set()
+    for cell in gridCellList:
+        gridCellsMessage.cells.append(convertCellToPoint(cell, grid.cellOrigin, grid.resolution))
 
-    for tuple in frontier.elements:
-        cell = tuple[1]
-        if cell not in expanded and cell not in alreadyPrintedFrontierCells:
-            frontierGridCells.cells.append(convertCellToPoint(cell, grid.cellOrigin, grid.resolution))
-            alreadyPrintedFrontierCells.add(cell)
-
-    for cell in expanded:
-        expandedGridCells.cells.append(convertCellToPoint(cell, grid.cellOrigin, grid.resolution))
-
-    frontier_cell_pub.publish(frontierGridCells)
-    expanded_cell_pub.publish(expandedGridCells)
+    publisher.publish(gridCellsMessage)
 
 #Creates a GridCells message and auto-initializes some fields.
 def createGridCellsMessage():
@@ -373,18 +367,6 @@ def createGridCellsMessage():
     gridCells.cells = []
 
     return gridCells
-
-def publishPath(path):
-    pathGridCells = createGridCellsMessage()
-
-    for cell in path:
-        pathGridCells.cells.append(convertCellToPoint(cell, grid.cellOrigin, grid.resolution))
-
-    path_cell_pub.publish(pathGridCells)
-
-def processCostGrid(costGridMessage):
-    #TODO: implement cost grid scaling
-    pass
 
 #TODO: possibly create a new class that will contain this service method
 def getWaypoints(req):
@@ -401,11 +383,21 @@ def getWaypoints(req):
         while not aStarDone:
             aStarDone = pathFinder.runAStarIteration(grid)
 
-        publishGridCells(pathFinder.frontier, pathFinder.expanded)
+        publishGridCells(expanded_cell_pub, pathFinder.expanded)
+
+        #Convert frontier queue to the frontier set
+        frontierCells = set()
+
+        for tuple in pathFinder.frontier.elements:
+            cell = tuple[1]
+            if cell not in pathFinder.expanded and cell not in frontierCells:
+                frontierCells.add(cell)
+
+        publishGridCells(frontier_cell_pub, frontierCells)
 
         pathFinder.findPath()
 
-        publishPath(pathFinder.path)
+        publishGridCells(path_cell_pub, pathFinder.path)
 
         pathFinder.calculateWaypoints()
 
@@ -426,7 +418,7 @@ def getWaypoints(req):
         waypoints.poses.append(poseObj)
 
 #Gets the centroid of the largest frontier
-def getCentroid():
+def getCentroid(result_queue):
     visited = set()
     clusters = []
 
@@ -439,23 +431,24 @@ def getCentroid():
             clusters.append(cluster)
 
     if len(clusters) == 0:
-        raise Exception("Was not able to find any frontiers!")
+        return
     else:
         #Find the largest cluster in the list of clusters
         (largestClusterIndex, largestCluster) = max(enumerate(clusters), key = lambda tup: len(tup[1]))
 
-        # maxLengthSoFar = 0
-        #
-        # for cluster in clusters:
-        #     if len(cluster > maxLengthSoFar):
-        #         largestCluster = cluster
-
         centroid = findCentroid(largestCluster)
+
+    clusterCells = []
+    for cluster in clusters:
+        clusterCells.append(cluster)
+
+    publishGridCells(cluster_cell_pub, clusterCells)
+    publishGridCells(centroid_cell_pub, [centroid])
 
     centroidPos = Point()
     centroidPos.x = centroid[0] + grid.cellOrigin[0]
     centroidPos.y = centroid[1] + grid.cellOrigin[1]
-    return centroidPos
+    result_queue.put(centroidPos)
 
 #Adds the cell to the cluster if the cell is on the border with the unexplored cells and is not visited
 def expandCluster(cell, cluster, visited):
@@ -497,8 +490,8 @@ def findCentroid(cluster):
 
     clusterSize = len(cluster)
 
-    centroidX = round(centroidX / clusterSize)
-    centroidY = round(centroidY / clusterSize)
+    centroidX = int(round(centroidX / clusterSize))
+    centroidY = int(round(centroidY / clusterSize))
 
     return (centroidX, centroidY)
 
@@ -506,23 +499,61 @@ def handleRequest(req):
     global originalGridMessage
     global grid
 
+    print "Received request."
+
     originalGridMessage = req.map
+
+    #Start the thread for the centroid finding logic
+    # if req.processCostMap:
+    #     result_queue = Queue.Queue()
+    #     thread1 = threading.Thread(
+    #             target=processCostGrid,
+    #             name="ProcessCostGrid() Thread",
+    #             args=[req.costMap, result_queue],
+    #             )
+    #     thread1.start()
 
     grid = processOccupancyGrid(originalGridMessage)
 
-    if req.processCostMap:
-        costGrid = processCostGrid(req.costMap)
+    # if req.processCostMap:
+    #     thread1.join()
+    #     #costGrid = result_queue.get()
+    #     #grid.addCostGrid(costGrid) -- TODO: Add similar method to the grid class
 
+    #By default centroid is not found
+    foundCentroid = False
+
+    #Start the thread for the centroid finding logic
+    # if req.returnCentroid:
+    #     result_queue = Queue.Queue()
+    #     thread2 = threading.Thread(
+    #             target=findCentroid,
+    #             name="FindCentroid() Thread",
+    #             args=[result_queue],
+    #             )
+    #     thread2.start()
+
+    #Meanwhile fine the path using A star in the main thread
     waypoints = getWaypoints(req)
 
-    foundCentroid = False
-    if req.returnCentroid:
-        try:
-            centroid = getCentroid(req)
-            foundCentroid = True
-        except:
-            centroid = Point()
-            foundCentroid = False
+    result_queue = Queue.Queue()
+
+    findCentroid(result_queue)
+
+    centroid = Point()
+
+    #Wait for the thread to be done and get the result
+    # if req.returnCentroid:
+    #     thread2.join()
+    #
+    #     if not result_queue.empty():
+    #         centroid = result_queue.get()
+    #         foundCentroid = True
+    #     else:
+    #         centroid = Point()
+    #         foundCentroid = False
+
+    print "Done with the request processing!"
 
     return TrajectoryResponse(waypoints, foundCentroid, centroid)
 
@@ -533,10 +564,15 @@ if __name__ == '__main__':
 
     global expanded_cell_pub
     global frontier_cell_pub
+    global path_cell_pub
+    global cluster_cell_pub
+    global centroid_cell_pub
 
     expanded_cell_pub = rospy.Publisher('/expandedGridCells', GridCells, queue_size=5) # Publisher for commanding robot motion
     frontier_cell_pub = rospy.Publisher('/frontierGridCells', GridCells, queue_size=5) # Publisher for commanding robot motion
     path_cell_pub = rospy.Publisher('/pathGridCells', GridCells, queue_size=5)
+    cluster_cell_pub = rospy.Publisher('/clusterGridCells', GridCells, queue_size=5)
+    centroid_cell_pub = rospy.Publisher('/centroidGridCell', GridCells, queue_size=5)
 
     print "Starting..."
 

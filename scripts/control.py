@@ -4,8 +4,9 @@ import sys
 import rospy, time, tf
 import math as math
 from nav_msgs.msg import Odometry, OccupancyGrid
-from lab4.srv import *
+from final_project.srv import *
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped, Point
+from std_msgs.msg import Bool
 from tf.transformations import euler_from_quaternion
 from threading import Thread
 
@@ -272,9 +273,12 @@ def requestTrajectory():
 
     rospy.wait_for_service('calculateTrajectory')
 
+    bool1 = Bool()
+    bool1.data = True
+
     try:
         calculateTraj = rospy.ServiceProxy('calculateTrajectory', Trajectory)
-        response = calculateTraj(initPos, goalPos, map, True, map, True)
+        response = calculateTraj(initPos, goalPos, map, bool1, map, bool1)
     except rospy.ServiceException, e:
         print "Service call failed: %s" % e
 
@@ -313,7 +317,7 @@ def executeTrajectory():
 
 if __name__ == "__main__":
     #Initialize the new node
-    rospy.init_node('lab4_path_control')
+    rospy.init_node('path_control')
 
     #Flags that indicate if the initial or goal positions were received
     global receivedInitialPos

@@ -3,8 +3,5 @@ geometry_msgs/PoseStamped goalPos
 nav_msgs/OccupancyGrid map
 std_msgs/Bool processCostMap
 nav_msgs/OccupancyGrid costMap
-std_msgs/Bool returnCentroid 
 ---
 nav_msgs/Path path
-std_msgs/Bool foundCentroid
-geometry_msgs/Point centroid

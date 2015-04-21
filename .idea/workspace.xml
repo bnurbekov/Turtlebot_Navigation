@@ -27,10 +27,10 @@
       <file leaf-file-name="path_planner.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/scripts/path_planner.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.89830506" vertical-offset="8140" max-vertical-offset="8835">
-              <caret line="581" column="5" selection-start-line="581" selection-start-column="5" selection-end-line="581" selection-end-column="5" />
+            <state vertical-scroll-proportion="1.7627119" vertical-offset="7405" max-vertical-offset="8640">
+              <caret line="566" column="48" selection-start-line="566" selection-start-column="48" selection-end-line="566" selection-end-column="48" />
               <folding>
-                <element signature="e#10237#10285#0" expanded="false" />
+                <element signature="e#10267#10315#0" expanded="false" />
               </folding>
             </state>
           </provider>
@@ -39,11 +39,9 @@
       <file leaf-file-name="control.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/scripts/control.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="78.25" vertical-offset="4182" max-vertical-offset="5640">
-              <caret line="91" column="12" selection-start-line="91" selection-start-column="8" selection-end-line="91" selection-end-column="12" />
-              <folding>
-                <element signature="e#23#33#0" expanded="true" />
-              </folding>
+            <state vertical-scroll-proportion="-2.5" vertical-offset="0" max-vertical-offset="5640">
+              <caret line="6" column="31" selection-start-line="6" selection-start-column="31" selection-end-line="6" selection-end-column="31" />
+              <folding />
             </state>
           </provider>
         </entry>
@@ -51,18 +49,8 @@
       <file leaf-file-name="CMakeLists.txt" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/CMakeLists.txt">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.0" vertical-offset="495" max-vertical-offset="2580">
-              <caret line="42" column="4" selection-start-line="42" selection-start-column="4" selection-end-line="42" selection-end-column="4" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="Response.msg" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/msg/Response.msg">
-          <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="135">
-              <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+            <state vertical-scroll-proportion="0.0" vertical-offset="906" max-vertical-offset="2595">
+              <caret line="35" column="76" selection-start-line="35" selection-start-column="76" selection-end-line="35" selection-end-column="76" />
               <folding />
             </state>
           </provider>
@@ -71,8 +59,8 @@
       <file leaf-file-name="Trajectory.srv" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/srv/Trajectory.srv">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.0" vertical-offset="30" max-vertical-offset="240">
-              <caret line="9" column="0" selection-start-line="9" selection-start-column="0" selection-end-line="9" selection-end-column="0" />
+            <state vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="195">
+              <caret line="6" column="0" selection-start-line="6" selection-start-column="0" selection-end-line="6" selection-end-column="0" />
               <folding />
             </state>
           </provider>
@@ -105,9 +93,9 @@
       <list>
         <option value="$PROJECT_DIR$/scripts/Grid.py" />
         <option value="$USER_HOME$/ros_ws/RBE3002/final_project/test.py" />
-        <option value="$PROJECT_DIR$/CMakeLists.txt" />
         <option value="$PROJECT_DIR$/srv/Trajectory.srv" />
         <option value="$PROJECT_DIR$/scripts/control.py" />
+        <option value="$PROJECT_DIR$/CMakeLists.txt" />
         <option value="$PROJECT_DIR$/scripts/path_planner.py" />
       </list>
     </option>
@@ -185,20 +173,6 @@
             </PATH_ELEMENT>
             <PATH_ELEMENT>
               <option name="myItemId" value="scripts" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-          </PATH>
-          <PATH>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="final_project" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.ProjectViewProjectNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="final_project" />
-              <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
-            </PATH_ELEMENT>
-            <PATH_ELEMENT>
-              <option name="myItemId" value="msg" />
               <option name="myItemType" value="com.intellij.ide.projectView.impl.nodes.PsiDirectoryNode" />
             </PATH_ELEMENT>
           </PATH>
@@ -358,7 +332,7 @@
   </component>
   <component name="ToolWindowManager">
     <frame x="65" y="24" width="1301" height="744" extended-state="6" />
-    <editor active="true" />
+    <editor active="false" />
     <layout>
       <window_info id="Changes" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
@@ -415,7 +389,7 @@
         <state vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="6825">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#10237#10285#0" expanded="false" />
+            <element signature="e#10267#10315#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -449,7 +423,7 @@
         <state vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="5880">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#10237#10285#0" expanded="false" />
+            <element signature="e#10267#10315#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -486,46 +460,36 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/CMakeLists.txt">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0" vertical-offset="495" max-vertical-offset="2580">
-          <caret line="42" column="4" selection-start-line="42" selection-start-column="4" selection-end-line="42" selection-end-column="4" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/msg/Response.msg">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="639">
-          <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/srv/Trajectory.srv">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0" vertical-offset="30" max-vertical-offset="240">
-          <caret line="9" column="0" selection-start-line="9" selection-start-column="0" selection-end-line="9" selection-end-column="0" />
+        <state vertical-scroll-proportion="0.0" vertical-offset="0" max-vertical-offset="195">
+          <caret line="6" column="0" selection-start-line="6" selection-start-column="0" selection-end-line="6" selection-end-column="0" />
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/scripts/control.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="78.25" vertical-offset="4182" max-vertical-offset="5640">
-          <caret line="91" column="12" selection-start-line="91" selection-start-column="8" selection-end-line="91" selection-end-column="12" />
-          <folding>
-            <element signature="e#23#33#0" expanded="true" />
-          </folding>
+        <state vertical-scroll-proportion="-2.5" vertical-offset="0" max-vertical-offset="5640">
+          <caret line="6" column="31" selection-start-line="6" selection-start-column="31" selection-end-line="6" selection-end-column="31" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/CMakeLists.txt">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0" vertical-offset="906" max-vertical-offset="2595">
+          <caret line="35" column="76" selection-start-line="35" selection-start-column="76" selection-end-line="35" selection-end-column="76" />
+          <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/scripts/path_planner.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.89830506" vertical-offset="8140" max-vertical-offset="8835">
-          <caret line="581" column="5" selection-start-line="581" selection-start-column="5" selection-end-line="581" selection-end-column="5" />
+        <state vertical-scroll-proportion="1.7627119" vertical-offset="7405" max-vertical-offset="8640">
+          <caret line="566" column="48" selection-start-line="566" selection-start-column="48" selection-end-line="566" selection-end-column="48" />
           <folding>
-            <element signature="e#10237#10285#0" expanded="false" />
+            <element signature="e#10267#10315#0" expanded="false" />
           </folding>
         </state>
       </provider>

@@ -4,6 +4,7 @@ import rospy, math, heapq, Queue, threading
 # Add additional imports for each of the message types used
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped, Point
 from nav_msgs.msg import Odometry, OccupancyGrid, MapMetaData, GridCells, Path
+from std_msgs.msg import Bool
 from final_project.srv import *
 
 #Class that implements priority queue.
@@ -418,7 +419,18 @@ def getWaypoints(req):
         waypoints.poses.append(poseObj)
 
 #Gets the centroid of the largest frontier
-def getCentroid(result_queue):
+def getCentroid(req):
+    global originalGridMessage
+    global grid
+
+    print "Received centroid request."
+
+    originalGridMessage = req.map
+
+    grid = processOccupancyGrid(originalGridMessage)
+
+    foundCentroid = True
+
     visited = set()
     clusters = []
 
@@ -431,7 +443,8 @@ def getCentroid(result_queue):
             clusters.append(cluster)
 
     if len(clusters) == 0:
-        return
+        centroidPos = Point()
+        foundCentroid = False
     else:
         #Find the largest cluster in the list of clusters
         (largestClusterIndex, largestCluster) = max(enumerate(clusters), key = lambda tup: len(tup[1]))
@@ -440,17 +453,20 @@ def getCentroid(result_queue):
 
         centroid = calculateCentroid(largestCluster)
 
-    clusterCells = []
-    for cluster in clusters:
-        clusterCells += cluster
+        clusterCells = []
+        for cluster in clusters:
+            clusterCells += cluster
 
-    publishGridCells(cluster_cell_pub, clusters[1])
-    publishGridCells(centroid_cell_pub, [centroid])
+        publishGridCells(cluster_cell_pub, clusters[1])
+        publishGridCells(centroid_cell_pub, [centroid])
 
-    centroidPos = Point()
-    centroidPos.x = centroid[0] + grid.cellOrigin[0]
-    centroidPos.y = centroid[1] + grid.cellOrigin[1]
-    result_queue.put(centroidPos)
+        centroidPos = Point()
+        centroidPos.x = centroid[0] + grid.cellOrigin[0]
+        centroidPos.y = centroid[1] + grid.cellOrigin[1]
+
+    print "Done with the centroid request processing!"
+
+    return CentroidResponse(Bool(data=foundCentroid), centroidPos)
 
 #Adds the cell to the cluster if the cell is on the border with the unexplored cells and is not visited
 def expandCluster(cell, cluster, visited):
@@ -497,11 +513,11 @@ def calculateCentroid(cluster):
 
     return (centroidX, centroidY)
 
-def handleRequest(req):
+def getTrajectory(req):
     global originalGridMessage
     global grid
 
-    print "Received request."
+    print "Received trajectory request."
 
     originalGridMessage = req.map
 
@@ -522,42 +538,12 @@ def handleRequest(req):
     #     #costGrid = result_queue.get()
     #     #grid.addCostGrid(costGrid) -- TODO: Add similar method to the grid class
 
-    #By default centroid is not found
-    foundCentroid = False
-
-    #Start the thread for the centroid finding logic
-    # if req.returnCentroid:
-    #     result_queue = Queue.Queue()
-    #     thread2 = threading.Thread(
-    #             target=getCentroid,
-    #             name="GetCentroid() Thread",
-    #             args=[result_queue],
-    #             )
-    #     thread2.start()
-
     #Meanwhile fine the path using A star in the main thread
     waypoints = getWaypoints(req)
 
-    result_queue = Queue.Queue()
+    print "Done with the trajectory request processing!"
 
-    getCentroid(result_queue)
-
-    centroid = Point()
-
-    #Wait for the thread to be done and get the result
-    # if req.returnCentroid:
-    #     thread2.join()
-    #
-    #     if not result_queue.empty():
-    #         centroid = result_queue.get()
-    #         foundCentroid = True
-    #     else:
-    #         centroid = Point()
-    #         foundCentroid = False
-
-    print "Done with the request processing!"
-
-    return TrajectoryResponse(waypoints, foundCentroid, centroid)
+    return TrajectoryResponse(waypoints)
 
 # This is the program's main function
 if __name__ == '__main__':
@@ -578,9 +564,10 @@ if __name__ == '__main__':
 
     print "Starting..."
 
-    s = rospy.Service('calculateTrajectory', Trajectory, handleRequest)
-    #s = rospy.Service('getCentroid', Centroid, getCentroid)
-    print "Service is active now!"
+    s = rospy.Service('calculateTrajectory', Trajectory, getTrajectory)
+    print "calculateTrajectory() service is active now!"
+    s = rospy.Service('getCentroid', Centroid, getCentroid)
+    print "getCentroid() service is active now!"
     rospy.spin()
 
     print "Complete!"

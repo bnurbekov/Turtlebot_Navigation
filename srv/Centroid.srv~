@@ -1,0 +1,4 @@
+nav_msgs/OccupancyGrid map
+---
+std_msgs/Bool foundCentroid
+geometry_msgs/Point centroid

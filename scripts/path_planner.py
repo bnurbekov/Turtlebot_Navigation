@@ -436,13 +436,15 @@ def getCentroid(result_queue):
         #Find the largest cluster in the list of clusters
         (largestClusterIndex, largestCluster) = max(enumerate(clusters), key = lambda tup: len(tup[1]))
 
-        centroid = findCentroid(largestCluster)
+        print largestClusterIndex
+
+        centroid = calculateCentroid(largestCluster)
 
     clusterCells = []
     for cluster in clusters:
-        clusterCells.append(cluster)
+        clusterCells += cluster
 
-    publishGridCells(cluster_cell_pub, clusterCells)
+    publishGridCells(cluster_cell_pub, clusters[1])
     publishGridCells(centroid_cell_pub, [centroid])
 
     centroidPos = Point()
@@ -479,7 +481,7 @@ def expandCluster(cell, cluster, visited):
         for clusterCandidate in possibleClusterCandidates:
             expandCluster(clusterCandidate, cluster, visited)
 
-def findCentroid(cluster):
+def calculateCentroid(cluster):
     centroidX = 0
     centroidY = 0
 
@@ -527,8 +529,8 @@ def handleRequest(req):
     # if req.returnCentroid:
     #     result_queue = Queue.Queue()
     #     thread2 = threading.Thread(
-    #             target=findCentroid,
-    #             name="FindCentroid() Thread",
+    #             target=getCentroid,
+    #             name="GetCentroid() Thread",
     #             args=[result_queue],
     #             )
     #     thread2.start()
@@ -538,7 +540,7 @@ def handleRequest(req):
 
     result_queue = Queue.Queue()
 
-    findCentroid(result_queue)
+    getCentroid(result_queue)
 
     centroid = Point()
 
@@ -577,6 +579,7 @@ if __name__ == '__main__':
     print "Starting..."
 
     s = rospy.Service('calculateTrajectory', Trajectory, handleRequest)
+    #s = rospy.Service('getCentroid', Centroid, getCentroid)
     print "Service is active now!"
     rospy.spin()
 

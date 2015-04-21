@@ -6,7 +6,6 @@ import math as math
 from nav_msgs.msg import Odometry, OccupancyGrid
 from final_project.srv import *
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped, Point
-from std_msgs.msg import Bool
 from tf.transformations import euler_from_quaternion
 from threading import Thread
 
@@ -212,17 +211,6 @@ def goToPosition(goalX, goalY):
     print "Driving forward by distance: %f" % distance
     driveStraight(.15, distance)
 
-#Callback function that processes the initial position received.
-def processGoalPos(goalPos):
-    global goalPosX
-    global goalPosY
-    global receivedGoalPos
-
-    goalPosX = goalPos.pose.position.x
-    goalPosY = goalPos.pose.position.y
-
-    receivedGoalPos = True
-
 #Callback function that processes the OccupancyGrid message.
 def mapCallback(mapMessage):
     global map
@@ -252,16 +240,16 @@ def processReceivedMap():
         try:
             previousTrajectory
         except NameError:
-            previousTrajectory = response
+            previousTrajectory = trajectory
             isNewTrajectoryReady = True
         else:
             #Check if the previous trajectory is the same as the received trajectory
-            if previousTrajectory.path.poses != response.path.poses:
+            if previousTrajectory.path.poses != trajectory.path.poses:
                 isNewTrajectoryReady = True
 
 #Requests the trajectory
 def requestTrajectory():
-    global response
+    global trajectory
 
     initPos = PoseWithCovarianceStamped()
     initPos.pose.pose.position.x = current_x
@@ -273,12 +261,9 @@ def requestTrajectory():
 
     rospy.wait_for_service('calculateTrajectory')
 
-    bool1 = Bool()
-    bool1.data = True
-
     try:
         calculateTraj = rospy.ServiceProxy('calculateTrajectory', Trajectory)
-        response = calculateTraj(initPos, goalPos, map, bool1, map, bool1)
+        trajectory = calculateTraj(initPos, goalPos, map)
     except rospy.ServiceException, e:
         print "Service call failed: %s" % e
 
@@ -296,7 +281,7 @@ def executeTrajectory():
 
     while not reachedGoal and not rospy.is_shutdown():
         counter = 0
-        oldTrajectoryPoses = response.path.poses
+        oldTrajectoryPoses = trajectory.path.poses
         isNewTrajectoryReady = False
 
         for point in oldTrajectoryPoses:
@@ -317,11 +302,10 @@ def executeTrajectory():
 
 if __name__ == "__main__":
     #Initialize the new node
-    rospy.init_node('path_control')
+    rospy.init_node('control')
 
     #Flags that indicate if the initial or goal positions were received
     global receivedInitialPos
-    global receivedGoalPos
     global receivedNewMap
 
     #Flag
@@ -332,18 +316,16 @@ if __name__ == "__main__":
     global wasLocalGoalDefined
 
     #Trajectory
-    global response
+    global trajectory
     global tfListener
 
     wasLocalGoalDefined = False
     reachedGoal = False
     isNewTrajectoryReady = False
     receivedInitialPos = False
-    receivedGoalPos = False
     receivedNewMap = False
 
     pub = rospy.Publisher('/cmd_vel_mux/input/teleop', Twist, queue_size=5)
-    goal_pos_sub = rospy.Subscriber('/goalPos', PoseStamped, processGoalPos, queue_size=1)
     map_sub = rospy.Subscriber('/map', OccupancyGrid, mapCallback, queue_size=1)
     tfListener = tf.TransformListener()
 
@@ -351,17 +333,38 @@ if __name__ == "__main__":
 
     Thread(target=request_pos).start()
 
-    while not receivedInitialPos or not receivedGoalPos:
+    while not receivedInitialPos or not receivedNewMap:
         rospy.sleep(.1)
         pass
 
-    print "Received initial and goal positions!"
+    #################################################################
+    rospy.wait_for_service('getCentroid')
 
-    Thread(target=processReceivedMap).start()
+    try:
+        getCentroid = rospy.ServiceProxy('getCentroid', Centroid)
+        centroid = getCentroid(map)
+    except rospy.ServiceException, e:
+        print "Service call failed: %s" % e
 
-    print "Starting trajectory execution..."
+    # try:
+    #     getTrajectory = rospy.ServiceProxy('getCentroid', T)
+    #     trajectory = getCentroid(initPos, goalPos, map)
+    # except rospy.ServiceException, e:
+    #     print "Service call failed: %s" % e
 
-    executeTrajectory()
+    rospy.spin()
+
+    exit()
+    #################################################################
+
+    #
+    # print "Received initial and goal positions!"
+    #
+    # Thread(target=processReceivedMap).start()
+    #
+    # print "Starting trajectory execution..."
+    #
+    # executeTrajectory()
 
     print "Finished trajectory!"
 

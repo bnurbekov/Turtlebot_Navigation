@@ -155,10 +155,14 @@ class Grid:
                 if (currentCellValue == CellType.Obstacle):
                     ng_data[ng_row][ng_column] = CellType.Obstacle
                     self.obstacles.add((ng_column, ng_row))
+                    if ng_oldCellValue == CellType.Empty:
+                        self.empty.remove((ng_column, ng_row))
 
                 elif (currentCellValue == CellType.Unexplored):
                     if ng_oldCellValue != CellType.Obstacle:
                         ng_data[ng_row][ng_column] = CellType.Unexplored
+                        if ng_oldCellValue == CellType.Empty:
+                            self.empty.remove((ng_column, ng_row))
 
                 else: #empty cell
                     if ng_oldCellValue != CellType.Obstacle and ng_oldCellValue != CellType.Unexplored:
@@ -437,10 +441,15 @@ def getCentroid(req):
     for cell in grid.empty:
         cluster = []
 
+        # rospy.logdebug("---------> New cluster!")
+
         expandCluster(cell, cluster, visited)
 
         if len(cluster) != 0:
             clusters.append(cluster)
+            # rospy.logdebug("---------> Cluster was added!")
+        # else:
+        #     rospy.logdebug("---------> Cluster was not added!")
 
     if len(clusters) == 0:
         centroidPos = Point()
@@ -449,16 +458,23 @@ def getCentroid(req):
         #Find the largest cluster in the list of clusters
         (largestClusterIndex, largestCluster) = max(enumerate(clusters), key = lambda tup: len(tup[1]))
 
-        print largestClusterIndex
-
         centroid = calculateCentroid(largestCluster)
 
         clusterCells = []
         for cluster in clusters:
             clusterCells += cluster
 
-        publishGridCells(cluster_cell_pub, clusters[1])
-        publishGridCells(centroid_cell_pub, [centroid])
+        # print "Number of clusters: %d" % (len(clusters))
+
+        # for cluster in clusters:
+        #     centr = calculateCentroid(cluster)
+        #     publishGridCells(cluster_cell_pub, cluster)
+        #     publishGridCells(centroid_cell_pub, [centr])
+        #     rospy.sleep(5)
+
+        # publishGridCells(cluster_cell_pub, clusterCells)
+        # publishGridCells(centroid_cell_pub, [centroid])
+        # publishGridCells(empty_cell_pub, grid.empty)
 
         centroidPos = Point()
         centroidPos.x = centroid[0] + grid.cellOrigin[0]
@@ -474,9 +490,13 @@ def expandCluster(cell, cluster, visited):
         return
 
     visited.add(cell)
+    # "Visited:"
+    # print cell
     possibleClusterCandidates = []
 
     neighbors = grid.getNeighbors(cell)
+    # print "Neighbors:"
+    # print neighbors
 
     doesCellBelongToCluster = False
 
@@ -485,10 +505,20 @@ def expandCluster(cell, cluster, visited):
         neighborValue = grid.getCellValue(neighbor)
         (neighborX, neighborY) = neighbor
 
-        if neighborValue == CellType.Unexplored and (neighborX - x == 0 or neighborY - y == 0):
-            doesCellBelongToCluster = True
+        # print neighbor,
+        # print "=>",
+        # print neighborValue
+
+        if neighborValue == CellType.Unexplored:
+            if (neighborX - x == 0 or neighborY - y == 0):
+                # print "Unexplored cell:"
+                # print neighbor
+                doesCellBelongToCluster = True
         elif neighborValue == CellType.Empty:
             possibleClusterCandidates.append(neighbor)
+
+    # print "Does cell belong to cluster:"
+    # print doesCellBelongToCluster
 
     if doesCellBelongToCluster:
         #1) Add the cell to the cluster
@@ -548,24 +578,26 @@ def getTrajectory(req):
 # This is the program's main function
 if __name__ == '__main__':
     # Change this node name to include your username
-    rospy.init_node('path_planner')
+    rospy.init_node('mapping')
 
     global expanded_cell_pub
     global frontier_cell_pub
     global path_cell_pub
     global cluster_cell_pub
     global centroid_cell_pub
+    global empty_cell_pub
 
     expanded_cell_pub = rospy.Publisher('/expandedGridCells', GridCells, queue_size=5) # Publisher for commanding robot motion
     frontier_cell_pub = rospy.Publisher('/frontierGridCells', GridCells, queue_size=5) # Publisher for commanding robot motion
     path_cell_pub = rospy.Publisher('/pathGridCells', GridCells, queue_size=5)
     cluster_cell_pub = rospy.Publisher('/clusterGridCells', GridCells, queue_size=5)
     centroid_cell_pub = rospy.Publisher('/centroidGridCell', GridCells, queue_size=5)
+    empty_cell_pub = rospy.Publisher('/emptyGridCell', GridCells, queue_size=5)
 
     print "Starting..."
 
-    s = rospy.Service('calculateTrajectory', Trajectory, getTrajectory)
-    print "calculateTrajectory() service is active now!"
+    s = rospy.Service('getTrajectory', Trajectory, getTrajectory)
+    print "getTrajectory() service is active now!"
     s = rospy.Service('getCentroid', Centroid, getCentroid)
     print "getCentroid() service is active now!"
     rospy.spin()

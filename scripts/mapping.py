@@ -192,6 +192,7 @@ class Grid:
                 newObstacles.add(neighborCell)
 
         self.obstacles = self.obstacles.union(newObstacles)
+        self.empty = self.empty - self.obstacles
 
     #Populates the set with cells that have the given value
     @staticmethod
@@ -352,22 +353,22 @@ def convertCellToPoint(cell, cellOrigin, resolution):
 
     return point
 
-def publishGridCells(publisher, gridCellList):
-    gridCellsMessage = createGridCellsMessage()
+def publishGridCells(publisher, gridCellList, resolution, cellOrigin):
+    gridCellsMessage = createGridCellsMessage(resolution)
 
     for cell in gridCellList:
-        gridCellsMessage.cells.append(convertCellToPoint(cell, grid.cellOrigin, grid.resolution))
+        gridCellsMessage.cells.append(convertCellToPoint(cell, cellOrigin, resolution))
 
     publisher.publish(gridCellsMessage)
 
 #Creates a GridCells message and auto-initializes some fields.
-def createGridCellsMessage():
+def createGridCellsMessage(gridResolution):
     gridCells = GridCells()
     gridCells.header.seq = 0
     gridCells.header.stamp = rospy.Time.now()
     gridCells.header.frame_id = "map"
-    gridCells.cell_width = grid.resolution
-    gridCells.cell_height = grid.resolution
+    gridCells.cell_width = gridResolution
+    gridCells.cell_height = gridResolution
 
     gridCells.cells = []
 
@@ -388,7 +389,7 @@ def getWaypoints(req):
         while not aStarDone:
             aStarDone = pathFinder.runAStarIteration(grid)
 
-        publishGridCells(expanded_cell_pub, pathFinder.expanded)
+        publishGridCells(expanded_cell_pub, pathFinder.expanded, grid.resolution, grid.cellOrigin)
 
         #Convert frontier queue to the frontier set
         frontierCells = set()
@@ -398,11 +399,11 @@ def getWaypoints(req):
             if cell not in pathFinder.expanded and cell not in frontierCells:
                 frontierCells.add(cell)
 
-        publishGridCells(frontier_cell_pub, frontierCells)
+        publishGridCells(frontier_cell_pub, frontierCells, grid.resolution, grid.cellOrigin)
 
         pathFinder.findPath()
 
-        publishGridCells(path_cell_pub, pathFinder.path)
+        publishGridCells(path_cell_pub, pathFinder.path, grid.resolution, grid.cellOrigin)
 
         pathFinder.calculateWaypoints()
 
@@ -466,15 +467,16 @@ def getCentroid(req):
 
         # print "Number of clusters: %d" % (len(clusters))
 
+        # Animation that shows the clusters and their respective centroids. Use for debugging!
         # for cluster in clusters:
         #     centr = calculateCentroid(cluster)
-        #     publishGridCells(cluster_cell_pub, cluster)
-        #     publishGridCells(centroid_cell_pub, [centr])
+        #     publishGridCells(cluster_cell_pub, cluster, grid.resolution, grid.cellOrigin)
+        #     publishGridCells(centroid_cell_pub, [centr], grid.resolution, grid.cellOrigin)
         #     rospy.sleep(5)
 
-        # publishGridCells(cluster_cell_pub, clusterCells)
-        # publishGridCells(centroid_cell_pub, [centroid])
-        # publishGridCells(empty_cell_pub, grid.empty)
+        publishGridCells(cluster_cell_pub, clusterCells, grid.resolution, grid.cellOrigin)
+        publishGridCells(centroid_cell_pub, [centroid], grid.resolution, grid.cellOrigin)
+        publishGridCells(empty_cell_pub, grid.empty, grid.resolution, grid.cellOrigin)
 
         centroidPos = Point()
         centroidPos.x = centroid[0] + grid.cellOrigin[0]
@@ -586,6 +588,8 @@ if __name__ == '__main__':
     global cluster_cell_pub
     global centroid_cell_pub
     global empty_cell_pub
+    global obstacle_cell_pub
+    global unknown_cell_pub
 
     expanded_cell_pub = rospy.Publisher('/expandedGridCells', GridCells, queue_size=5) # Publisher for commanding robot motion
     frontier_cell_pub = rospy.Publisher('/frontierGridCells', GridCells, queue_size=5) # Publisher for commanding robot motion
@@ -593,6 +597,8 @@ if __name__ == '__main__':
     cluster_cell_pub = rospy.Publisher('/clusterGridCells', GridCells, queue_size=5)
     centroid_cell_pub = rospy.Publisher('/centroidGridCell', GridCells, queue_size=5)
     empty_cell_pub = rospy.Publisher('/emptyGridCell', GridCells, queue_size=5)
+    obstacle_cell_pub = rospy.Publisher('/obstacleGridCell', GridCells, queue_size=5)
+    unknown_cell_pub = rospy.Publisher('/unknownGridCell', GridCells, queue_size=5)
 
     print "Starting..."
 

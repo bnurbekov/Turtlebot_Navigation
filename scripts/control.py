@@ -5,16 +5,17 @@ import rospy, time, tf
 import math as math
 from nav_msgs.msg import Odometry, OccupancyGrid
 from final_project.srv import *
-from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped, Point
+from geometry_msgs.msg import Twist, Point
+from std_msgs.msg import Bool
 from tf.transformations import euler_from_quaternion
 from threading import Thread
 
-
-DEBUG_MODE = True
 WHEEL_RADIUS = 0.035
 DISTANCE_BETWEEN_WHEELS = 0.23
 POS_TOLERANCE = 0.1
 ANGLE_TOLERANCE = 0.05
+POS_REQUEST_RATE = 10.0
+PROCESS_COSTMAP = False
 
 #Impelements PID controller
 class PID:
@@ -62,16 +63,142 @@ class PID:
         self.Integrator = 0
         self.Derivator = 0
 
-#Requests the current position as a transform
-def request_pos():
+#A class that is responsible for the robot control and publishing messages to the robot
+class RobotControl:
+    def __init__(self, publisher):
+        self.publisher = publisher
+
+    #Adds two angles
+    def addAngles(self, angle1, angle2):
+        result = angle1 + angle2
+
+        if result > math.pi:
+            result %= math.pi
+            result -= math.pi
+        elif result < -math.pi:
+            result %= -math.pi
+            result += math.pi
+
+        return result
+
+    #Publishes twist
+    def publishTwist(self, x_vel, angular_vel):
+        twist = Twist()
+        twist.linear.x = x_vel;
+        twist.linear.y = 0;
+        twist.linear.z = 0
+        twist.angular.x = 0;
+        twist.angular.y = 0;
+        twist.angular.z = angular_vel
+
+        self.publisher.publish(twist)
+
+    # This function accepts two wheel velocities and a time interval.
+    def spinWheels(self, u1, u2, t):
+        x_vel = (WHEEL_RADIUS / 2) * (u1 + u2)
+        angular_vel = (WHEEL_RADIUS / DISTANCE_BETWEEN_WHEELS) * (u1 - u2)
+
+        startTime = time.time()
+
+        self.publishTwist(x_vel, angular_vel)
+
+        while time.time() - startTime < t:
+            self.publishTwist(x_vel, angular_vel)
+
+        self.publishTwist(0, 0)
+
+    #This function accepts a speed and a distance for the robot to move in a straight line
+    def driveStraight(self, speed, distance):
+        startPos_x = current_x
+        startPos_y = current_y
+
+        while math.sqrt(math.pow(current_x - startPos_x, 2) + math.pow(current_y - startPos_y, 2)) < distance:
+            self.publishTwist(speed, 0)
+
+            rospy.sleep(rospy.Duration(0, 1))
+
+        self.publishTwist(0, 0)
+
+    #Accepts an angle and makes the robot rotate around it.
+    def rotate(self, angle):
+        destination_angle = self.addAngles(current_theta, angle)
+
+        self.rotateToAngle(destination_angle)
+
+    #Rotates to the specified angle in the global coordinate frame
+    def rotateToAngle(self, destination_angle):
+        angular_vel = 0.5
+
+        if destination_angle > current_theta:
+            if destination_angle - current_theta < math.pi:
+                angular_vel_dir = 1
+            else:
+                angular_vel_dir = -1
+        else:
+            if current_theta - destination_angle < math.pi:
+                angular_vel_dir = -1
+            else:
+                angular_vel_dir = 1
+
+        while current_theta > destination_angle + ANGLE_TOLERANCE or current_theta < destination_angle - ANGLE_TOLERANCE:
+            self.publishTwist(0, angular_vel_dir*angular_vel)
+
+            rospy.sleep(rospy.Duration(0, 1))
+
+        self.publishTwist(0, 0)
+
+    #Rotate 360 degrees
+    def rotateAround(self):
+        self.rotate(math.pi/2)
+        self.rotate(math.pi/2)
+        self.rotate(math.pi/2)
+        self.rotate(math.pi/2)
+
+    #This function works the same as rotate how ever it does not publish linear velocities.
+    def driveArc(self, radius, speed, angle):
+        angular_vel = speed / radius
+
+        if angle < 0:
+            angular_vel = -angular_vel
+
+        destination_angle = self.addAngles(current_theta, angle)
+
+        while current_theta > destination_angle + ANGLE_TOLERANCE or current_theta < destination_angle - ANGLE_TOLERANCE:
+            self.publishTwist(speed, angular_vel)
+
+            rospy.sleep(rospy.Duration(0, 1))
+
+        self.publishTwist(0, 0)
+
+    #Commands the robot to go to the position specified
+    def goToPosition(self, goalX, goalY):
+        global current_x
+        global current_y
+        global current_theta
+
+        xDiff = goalX - current_x
+        yDiff = goalY - current_y
+
+        # adding current_theta is done in rotate(angle)
+        angle = math.atan2(yDiff, xDiff)
+        self.rotateToAngle(angle)
+
+        distance = math.sqrt(pow(xDiff, 2) + pow(yDiff, 2))
+        print "Driving forward by distance: %f" % distance
+        self.driveStraight(.15, distance)
+
+#Requests the current position as a transform at rate of 10Hz
+def request_pos_at_rate(frequency):
     global current_x
     global current_y
     global current_theta
-    global receivedInitialPos
+    global receivedInitPos
 
-    rate = rospy.Rate(10.0)
+    tfListener = tf.TransformListener()
 
-    while not reachedGoal and not rospy.is_shutdown():
+    rate = rospy.Rate(frequency)
+
+    while not rospy.is_shutdown():
         try:
             (trans, rot) = tfListener.lookupTransform('map', 'base_footprint', rospy.Time(0))
             current_x = trans[0]
@@ -85,136 +212,15 @@ def request_pos():
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             continue
 
-        if not receivedInitialPos:
-            receivedInitialPos = True
+        if not receivedInitPos:
+            receivedInitPos = True
 
         rate.sleep()
 
-#Adds two angles
-def addAngles(angle1, angle2):
-    result = angle1 + angle2
-
-    if result > math.pi:
-        result %= math.pi
-        result -= math.pi
-    elif result < -math.pi:
-        result %= -math.pi
-        result += math.pi
-
-    if DEBUG_MODE:
-        print "Angle1: %f, Angle2: %f, Result: %f" % (angle1, angle2, result)
-
-    return result
-
-#Publishes twist
-def publishTwist(x_vel, angular_vel):
-    twist = Twist()
-    twist.linear.x = x_vel;
-    twist.linear.y = 0;
-    twist.linear.z = 0
-    twist.angular.x = 0;
-    twist.angular.y = 0;
-    twist.angular.z = angular_vel
-
-    pub.publish(twist)
-
-# This function accepts two wheel velocities and a time interval.
-def spinWheels(u1, u2, t):
-    x_vel = (WHEEL_RADIUS / 2) * (u1 + u2)
-    angular_vel = (WHEEL_RADIUS / DISTANCE_BETWEEN_WHEELS) * (u1 - u2)
-
-    startTime = time.time()
-
-    publishTwist(x_vel, angular_vel)
-
-    while time.time() - startTime < t:
-        publishTwist(x_vel, angular_vel)
-
-    publishTwist(0, 0)
-
-#This function accepts a speed and a distance for the robot to move in a straight line
-def driveStraight(speed, distance):
-    startPos_x = current_x
-    startPos_y = current_y
-
-    while math.sqrt(math.pow(current_x - startPos_x, 2) + math.pow(current_y - startPos_y, 2)) < distance:
-        if isNewTrajectoryReady:
-            return
-
-        publishTwist(speed, 0)
-
-        rospy.sleep(rospy.Duration(0, 1))
-
-    publishTwist(0, 0)
-
-#Accepts an angle and makes the robot rotate around it.
-def rotate(angle):
-    destination_angle = addAngles(current_theta, angle)
-
-    rotateToAngle(destination_angle)
-
-#Rotates to the specified angle in the global coordinate frame
-def rotateToAngle(destination_angle):
-    angular_vel = 0.5
-
-    if destination_angle > current_theta:
-        if destination_angle - current_theta < math.pi:
-            angular_vel_dir = 1
-        else:
-            angular_vel_dir = -1
-    else:
-        if current_theta - destination_angle < math.pi:
-            angular_vel_dir = -1
-        else:
-            angular_vel_dir = 1
-
-    while current_theta > destination_angle + ANGLE_TOLERANCE or current_theta < destination_angle - ANGLE_TOLERANCE:
-        if isNewTrajectoryReady:
-            return
-
-        publishTwist(0, angular_vel_dir*angular_vel)
-
-        rospy.sleep(rospy.Duration(0, 1))
-
-    publishTwist(0, 0)
-
-#This function works the same as rotate how ever it does not publish linear velocities.
-def driveArc(radius, speed, angle):
-    angular_vel = speed / radius
-
-    if angle < 0:
-        angular_vel = -angular_vel
-
-    destination_angle = addAngles(current_theta, angle)
-
-    while current_theta > destination_angle + ANGLE_TOLERANCE or current_theta < destination_angle - ANGLE_TOLERANCE:
-        publishTwist(speed, angular_vel)
-
-        rospy.sleep(rospy.Duration(0, 1))
-
-    publishTwist(0, 0)
-
-#Commands the robot to go to the position specified
-def goToPosition(goalX, goalY):
-    global current_x
-    global current_y
-    global current_theta
-
-    xDiff = goalX - current_x
-    yDiff = goalY - current_y
-
-    # adding current_theta is done in rotate(angle)
-    angle = math.atan2(yDiff, xDiff)
-    rotateToAngle(angle)
-
-    distance = math.sqrt(pow(xDiff, 2) + pow(yDiff, 2))
-    print "Driving forward by distance: %f" % distance
-    driveStraight(.15, distance)
-
 #Callback function that processes the OccupancyGrid message.
 def mapCallback(mapMessage):
-    global map
     global receivedNewMap
+    global map
 
     #Store the mapMessage as global in order for the requestTrajectory function to use it.
     map = mapMessage
@@ -222,10 +228,11 @@ def mapCallback(mapMessage):
     receivedNewMap = True
 
 #Processes the received map.
-def processReceivedMap():
+def requestTrajectory(goalPos):
     global receivedNewMap
     global isNewTrajectoryReady
     global previousTrajectory
+    global trajectory
 
     while not reachedGoal and not rospy.is_shutdown():
         if not receivedNewMap:
@@ -234,7 +241,16 @@ def processReceivedMap():
             #Reset flag
             receivedNewMap = False
 
-        requestTrajectory()
+        #Request new trajectory
+        initPos = Point()
+        initPos.x = current_x
+        initPos.y = current_y
+
+        #create a stub for costmap
+        if not PROCESS_COSTMAP:
+            costMap = OccupancyGrid()
+
+        trajectory = getTrajectory(initPos, goalPos, map, Bool(data=PROCESS_COSTMAP), costMap)
 
         #Check if the previous trajectory was defined
         try:
@@ -247,28 +263,8 @@ def processReceivedMap():
             if previousTrajectory.path.poses != trajectory.path.poses:
                 isNewTrajectoryReady = True
 
-#Requests the trajectory
-def requestTrajectory():
-    global trajectory
-
-    initPos = PoseWithCovarianceStamped()
-    initPos.pose.pose.position.x = current_x
-    initPos.pose.pose.position.y = current_y
-
-    goalPos = PoseStamped()
-    goalPos.pose.position.x = goalPosX
-    goalPos.pose.position.y = goalPosY
-
-    rospy.wait_for_service('calculateTrajectory')
-
-    try:
-        calculateTraj = rospy.ServiceProxy('calculateTrajectory', Trajectory)
-        trajectory = calculateTraj(initPos, goalPos, map)
-    except rospy.ServiceException, e:
-        print "Service call failed: %s" % e
-
 #This function sequentially calls methods to perform a trajectory.
-def executeTrajectory():
+def executeTrajectory(control):
     global reachedGoal
     global isNewTrajectoryReady
     global localGoalX
@@ -290,7 +286,7 @@ def executeTrajectory():
 
             wasLocalGoalDefined = True
 
-            goToPosition(localGoalX, localGoalY)
+            control.goToPosition(localGoalX, localGoalY)
 
             if isNewTrajectoryReady:
                 break
@@ -300,12 +296,59 @@ def executeTrajectory():
 
             counter += 1
 
+#Executes the main task of exploring the world around
+def exploreEnvironment():
+    teleop_pub = rospy.Publisher('/cmd_vel_mux/input/teleop', Twist, queue_size=5)
+    control = RobotControl(teleop_pub)
+
+    while not rospy.is_shutdown():
+        #1) Rotate 360 degrees to initially explore the world around
+        print "=====> Started new iteration <====="
+        print "1) Rotating 360."
+        control.rotateAround()
+
+        #2) Request new centroid
+        print "2) Requesting new centroid."
+        centroidResponse = getCentroid(map)
+        if not centroidResponse.foundCentroid.data:
+            #We are done, exit.
+            break
+
+        #3) Go to a new goal
+        print "3) Navigating to the centroid."
+        navigateToGoal(control, centroidResponse.centroid)
+        print "======>   Ended iteration   <====="
+
+def navigateToGoal(control, goal):
+    global reachedGoal
+
+    reachedGoal = False
+
+    Thread(target=requestTrajectory, name="requestTrajectory() Thread", args=[goal]).start()
+    executeTrajectory(control)
+
 if __name__ == "__main__":
     #Initialize the new node
     rospy.init_node('control')
 
+    #Wait for trajectory service to start up
+    print "Waiting for getTrajectory() service to start up...",
+    rospy.wait_for_service('getTrajectory')
+    global getTrajectory
+    getTrajectory = rospy.ServiceProxy('getTrajectory', Trajectory)
+    print "DONE"
+    # trajectory = getCentroid(initPos, goalPos, map, processCostMap, costMap)
+    # initPos.pose.pose.position
+    print "Waiting for getCentroid() service to start up...",
+    #Wait for centroid service to start up
+    rospy.wait_for_service('getCentroid')
+    global getCentroid
+    getCentroid = rospy.ServiceProxy('getCentroid', Centroid)
+    print "DONE"
+    # centroid = getCentroid(map)
+
     #Flags that indicate if the initial or goal positions were received
-    global receivedInitialPos
+    global receivedInitPos
     global receivedNewMap
 
     #Flag
@@ -317,57 +360,36 @@ if __name__ == "__main__":
 
     #Trajectory
     global trajectory
-    global tfListener
+    global map
 
     wasLocalGoalDefined = False
     reachedGoal = False
     isNewTrajectoryReady = False
-    receivedInitialPos = False
+    receivedInitPos = False
     receivedNewMap = False
 
-    pub = rospy.Publisher('/cmd_vel_mux/input/teleop', Twist, queue_size=5)
+    #Subscribe to map updates
     map_sub = rospy.Subscriber('/map', OccupancyGrid, mapCallback, queue_size=1)
-    tfListener = tf.TransformListener()
+    #Start requesting position in background
+    Thread(target=request_pos_at_rate, name="Request_pos_at_rate Thread", args=[POS_REQUEST_RATE]).start()
 
-    print "Waiting for the initial and goal positions..."
+    print "Waiting for the initial position from tf...",
 
-    Thread(target=request_pos).start()
-
-    while not receivedInitialPos or not receivedNewMap:
+    while not receivedInitPos or not receivedNewMap:
         rospy.sleep(.1)
         pass
 
-    #################################################################
-    rospy.wait_for_service('getCentroid')
+    print "DONE"
 
-    try:
-        getCentroid = rospy.ServiceProxy('getCentroid', Centroid)
-        centroid = getCentroid(map)
-    except rospy.ServiceException, e:
-        print "Service call failed: %s" % e
+    print "Started exploration."
 
-    # try:
-    #     getTrajectory = rospy.ServiceProxy('getCentroid', T)
-    #     trajectory = getCentroid(initPos, goalPos, map)
-    # except rospy.ServiceException, e:
-    #     print "Service call failed: %s" % e
+    # control = RobotControl(rospy.Publisher('/cmd_vel_mux/input/teleop', Twist, queue_size=5))
+    # control.rotateAround()
 
-    rospy.spin()
+    exploreEnvironment()
 
+    print "Done with exploration. Exiting...",
+    print "DONE :)"
     exit()
-    #################################################################
-
-    #
-    # print "Received initial and goal positions!"
-    #
-    # Thread(target=processReceivedMap).start()
-    #
-    # print "Starting trajectory execution..."
-    #
-    # executeTrajectory()
-
-    print "Finished trajectory!"
-
-
 
 

@@ -2,7 +2,7 @@
 
 import rospy, math, heapq, Queue, threading
 # Add additional imports for each of the message types used
-from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped, Point
+from geometry_msgs.msg import Twist, Point, PoseStamped
 from nav_msgs.msg import Odometry, OccupancyGrid, MapMetaData, GridCells, Path
 from std_msgs.msg import Bool
 from final_project.srv import *
@@ -376,8 +376,8 @@ def createGridCellsMessage(gridResolution):
 
 #TODO: possibly create a new class that will contain this service method
 def getWaypoints(req):
-    startCell = convertPointToCell(req.initPos.pose.pose.position, grid.origin, grid.resolution)
-    goalCell = convertPointToCell(req.goalPos.pose.position, grid.origin, grid.resolution)
+    startCell = convertPointToCell(req.initPos, grid.origin, grid.resolution)
+    goalCell = convertPointToCell(req.goalPos, grid.origin, grid.resolution)
 
     pathFinder = PathFinder(startCell, goalCell)
 
@@ -411,17 +411,13 @@ def getWaypoints(req):
     waypoints = Path()
     waypoints.poses = []
 
-    (cellOriginX, cellOriginY) = grid.cellOrigin
-
     for cell in pathFinder.waypoints:
-        (x, y) = cell
-
         poseObj = PoseStamped()
-        poseObj.pose.position.x = cellOriginX + x * grid.resolution
-        poseObj.pose.position.y = cellOriginY + y * grid.resolution
-        poseObj.pose.position.z = 0
+        poseObj.pose.position = convertCellToPoint(cell, grid.cellOrigin, grid.resolution)
 
         waypoints.poses.append(poseObj)
+
+    return waypoints
 
 #Gets the centroid of the largest frontier
 def getCentroid(req):
@@ -478,9 +474,7 @@ def getCentroid(req):
         publishGridCells(centroid_cell_pub, [centroid], grid.resolution, grid.cellOrigin)
         publishGridCells(empty_cell_pub, grid.empty, grid.resolution, grid.cellOrigin)
 
-        centroidPos = Point()
-        centroidPos.x = centroid[0] + grid.cellOrigin[0]
-        centroidPos.y = centroid[1] + grid.cellOrigin[1]
+        centroidPos = convertCellToPoint(centroid, grid.cellOrigin, grid.resolution)
 
     print "Done with the centroid request processing!"
 
@@ -554,7 +548,7 @@ def getTrajectory(req):
     originalGridMessage = req.map
 
     #Start the thread for the centroid finding logic
-    # if req.processCostMap:
+    # if req.processCostMap.data:
     #     result_queue = Queue.Queue()
     #     thread1 = threading.Thread(
     #             target=processCostGrid,

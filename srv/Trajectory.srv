@@ -1,5 +1,5 @@
-geometry_msgs/PoseWithCovarianceStamped initPos
-geometry_msgs/PoseStamped goalPos
+geometry_msgs/Point initPos
+geometry_msgs/Point goalPos
 nav_msgs/OccupancyGrid map
 std_msgs/Bool processCostMap
 nav_msgs/OccupancyGrid costMap

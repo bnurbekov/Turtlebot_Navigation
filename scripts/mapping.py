@@ -7,6 +7,8 @@ from nav_msgs.msg import Odometry, OccupancyGrid, MapMetaData, GridCells, Path
 from std_msgs.msg import Bool
 from final_project.srv import *
 
+SCALE_FACTOR = 4
+
 #Class that implements priority queue.
 class PriorityQueue:
     def __init__(self):
@@ -31,10 +33,6 @@ class Grid:
 
         (x, y) = origin
         self.cellOrigin = (x + resolution/2, y + resolution/2)
-
-        #Creates the sets for obstacles and empty cells (for faster obstacle expansion and frontier searching)
-        self.obstacles = set()
-        self.empty = set()
 
         self.data = []
 
@@ -61,21 +59,6 @@ class Grid:
 
         self.data[y][x] = cellValue
 
-    #Gets neighbors of the specific cell
-    def getNeighbors(self, cell):
-        neighborList = []
-
-        (x, y) = cell
-
-        for i in range(0, 3):
-            for j in range(0, 3):
-                neighborCell = (x - 1 + j, y - 1 + i)
-
-                if self.isWithinGrid(neighborCell) and cell != neighborCell and self.getCellValue(neighborCell) != CellType.Obstacle:
-                    neighborList.append(neighborCell)
-
-        return neighborList
-
     #Checks if cell coordinate is valid
     def checkIfCellValid(self, cell):
         if cell is not self.hasProperTypeAndSize(cell):
@@ -100,10 +83,59 @@ class Grid:
         else:
             return False
 
-    #Scales map to a new resolution
-    def scaleMap(self, scaleFactor):
-        ng_data = [] #ng stands for NewGrid
+    #Prints the grid (primarily used for debugging).
+    def printToConsole(self):
+        for i in range(0, self.height):
+            for j in range(0, self.width):
+                cell = (j, self.height - 1 - i)
+                print self.getCellValue(cell),
+            print ""
 
+    #Abstract method that scales the map by the scaleFactor.
+    def scale(self, scaleFactor):
+        raise NotImplementedError("scale() method is not implemented!")
+
+    #Abstract method that returns the neighbor cells.
+    def getNeighbors(self, cell):
+        raise NotImplementedError("getNeighbors() method is not implemented!")
+
+    #Populates the set with cells that have the given value
+    @staticmethod
+    def populateSetWithCells(grid, set, value):
+        for i in range(0, grid.height):
+            for j in range(0, grid.width):
+                cell = (j, i)
+                cellType = grid.getCellValue(cell)
+                if cellType == value:
+                    set.add(cell)
+
+class OccupancyGrid(Grid):
+    def __init__(self, data, height, width, resolution, origin):
+        Grid.__init__(self, data, height, width, resolution, origin)
+
+        #Creates the sets for obstacles and empty cells (for faster obstacle expansion and frontier searching)
+        self.obstacles = set()
+        self.empty = set()
+
+        self.costGrid = None
+
+    #Gets neighbors of the specific cell
+    def getNeighbors(self, cell):
+        neighborList = []
+
+        (x, y) = cell
+
+        for i in range(0, 3):
+            for j in range(0, 3):
+                neighborCell = (x - 1 + j, y - 1 + i)
+
+                if self.isWithinGrid(neighborCell) and cell != neighborCell and self.getCellValue(neighborCell) != CellType.Obstacle:
+                    neighborList.append(neighborCell)
+
+        return neighborList
+
+    #Scales map to a new resolution
+    def scale(self, scaleFactor, cacheEmptyCells=True, cacheObstacleCells=True):
         self.obstacles.clear()
         self.empty.clear()
 
@@ -113,6 +145,7 @@ class Grid:
         if scaleFactor < 1:
             raise Exception("New resolution should be larger than the old resolution!")
 
+        ng_data = [] #ng stands for NewGrid
         ng_resolution = self.resolution * scaleFactor
 
         #Round up the new width and height
@@ -154,20 +187,22 @@ class Grid:
 
                 if (currentCellValue == CellType.Obstacle):
                     ng_data[ng_row][ng_column] = CellType.Obstacle
-                    self.obstacles.add((ng_column, ng_row))
-                    if ng_oldCellValue == CellType.Empty:
+                    if cacheObstacleCells:
+                        self.obstacles.add((ng_column, ng_row))
+                    if cacheEmptyCells and ng_oldCellValue == CellType.Empty:
                         self.empty.remove((ng_column, ng_row))
 
                 elif (currentCellValue == CellType.Unexplored):
                     if ng_oldCellValue != CellType.Obstacle:
                         ng_data[ng_row][ng_column] = CellType.Unexplored
-                        if ng_oldCellValue == CellType.Empty:
+                        if cacheEmptyCells and ng_oldCellValue == CellType.Empty:
                             self.empty.remove((ng_column, ng_row))
 
                 else: #empty cell
                     if ng_oldCellValue != CellType.Obstacle and ng_oldCellValue != CellType.Unexplored:
                         ng_data[ng_row][ng_column] = CellType.Empty
-                        self.empty.add((ng_column, ng_row))
+                        if cacheEmptyCells:
+                            self.empty.add((ng_column, ng_row))
 
         self.data = ng_data
         self.height = ng_height
@@ -192,37 +227,34 @@ class Grid:
                 newObstacles.add(neighborCell)
 
         self.obstacles = self.obstacles.union(newObstacles)
-        self.empty = self.empty - self.obstacles
 
-    #Populates the set with cells that have the given value
-    @staticmethod
-    def populateSetWithCells(grid, set, value):
-        for i in range(0, grid.height):
-            for j in range(0, grid.width):
-                cell = (j, i)
-                cellType = grid.getCellValue(cell)
-                if cellType == value:
-                    set.add(cell)
+        if self.empty: #If the empty cell cache is not empty, then remove empty cells that turned into obstacles after expansion
+            self.empty = self.empty - self.obstacles
 
-    #Prints the grid (primarily used for debugging).
-    def printToConsole(self):
-        for i in range(0, self.height):
-            for j in range(0, self.width):
-                cell = (j, self.height - 1 - i)
-                print self.getCellValue(cell),
-            print " "
+    #Adds cost grid to allow local cost map processing
+    def addCostGrid(self, costGrid):
+        self.costGrid = costGrid
 
+        if (self.resolution != costGrid.resolution):
+            raise Exception("Current implemenation does not support the addition of the cost grid that has different "
+                            "resolution than the occupancy grid.")
 
-    @staticmethod
-    def getHeuristic(currentCell, destinationCell):
+        #Warning: The offset calculation
+        self.costGridCellOffset = (int((costGrid[0] - self.cellOrigin[0]) / self.resolution),
+                                   int((costGrid[1] - self.cellOrigin[1]) / self.resolution))
+
+    #Gets heuristic relevant to the current grid
+    def getHeuristic(self, currentCell, destinationCell):
         (currentX, currentY) = currentCell
         (destinationX, destinationY) = destinationCell
 
         return math.sqrt((currentX - destinationX) ** 2 +
                          (currentY - destinationY) ** 2)
 
-    @staticmethod
-    def getPathCost(currentCell, destinationCell):
+    #Gets path cost relevant to the current grid
+    def getPathCost(self, currentCell, destinationCell):
+        cost = 0
+
         (currentX, currentY) = currentCell
         (destinationX, destinationY) = destinationCell
 
@@ -233,11 +265,95 @@ class Grid:
             raise Exception("getPathCost: The function estimates the cost only for adjacent cells!")
 
         if xDiff + yDiff == 2:
-            return 1.4
+            cost += 1.4
         elif xDiff + yDiff == 1:
-            return 1
-        else:
-            return 0
+            cost += 1
+
+        if self.costGrid != None:
+            #find the corresponding cell in costGrid
+            costGridCell = (currentCell[0] - self.costGridCellOffset[0], currentCell[1] - self.costGridCellOffset[1])
+
+            #add the additional cost if the cell is in costmap
+            if self.costGrid.isWithinGrid(costGridCell):
+                cost += self.costGrid.getCellValue(costGridCell)
+
+        return cost
+
+class CostGrid(Grid):
+    def __init__(self, data, height, width, resolution, origin):
+        Grid.__init__(self, data, height, width, resolution, origin)
+
+    def scale(self, scaleFactor):
+        if type(scaleFactor) != int:
+            raise Exception("The scale factor should be an integer!")
+
+        if scaleFactor < 1:
+            raise Exception("New resolution should be larger than the old resolution!")
+
+        ng_data = [] #ng stands for NewGrid
+        ng_resolution = self.resolution * scaleFactor
+
+        #Round up the new width and height
+        ng_width = -(-self.width // scaleFactor)
+        ng_height = -(-self.height // scaleFactor)
+
+        #Since the cells are squares, then the maximum number of cells in the old grid per cell in the new grid is going
+        #to be the square of the scaleFactor
+        max_cells_per_ng_cell = scaleFactor ** 2
+
+        ng_row = -1
+
+        for i in range(0, self.height):
+            temp_ng_row = i // scaleFactor
+
+            #We do this check in order to make sure that we append only one row per n old cells, where n is the scaleFactor
+            if ng_row != temp_ng_row:
+                ng_row = temp_ng_row
+                ng_data.append([])
+
+            ng_column = -1
+
+            for j in range(0, self.width):
+                temp_ng_column = j // scaleFactor
+
+                #We do this check in order to make sure that we append only one row per n old cells, where n is the scaleFactor
+                if ng_column != temp_ng_column:
+                    ng_column = temp_ng_column
+                    ng_data[ng_row].append([0, 0]) # -2 indicates that the new cell has no value assigned to it yet
+
+                cellValue = self.getCellValue((j, i))
+                ng_cellValue = ng_data[ng_row][ng_column]
+
+                ng_cellValue[0] += cellValue
+                ng_cellValue[1] += 1
+
+                [ng_sum, ng_count] = ng_cellValue
+
+                #If the max count of cells per new grid cell was reached, then replace sum and count pair with the actual average value
+                if (ng_count >= max_cells_per_ng_cell):
+                    ng_data[ng_row][ng_column] = ng_sum/ng_count
+
+        #Iterate through the last row and column to make sure all the sum and count pairs were converted into the actual average
+        for i in range(0, ng_height):
+            if (i == ng_height - 1):
+                for j in range(0, ng_width):
+                    ng_cellValue = ng_data[i][j]
+                    if type(ng_cellValue) == list:
+                        [ng_sum, ng_count] = ng_cellValue
+                        ng_data[i][j] = ng_sum/ng_count
+            else:
+                ng_cellValue = ng_data[i][ng_width-1]
+                if type(ng_cellValue) == list:
+                    [ng_sum, ng_count] = ng_cellValue
+                    ng_data[i][j] = ng_sum/ng_count
+
+        self.data = ng_data
+        self.height = ng_height
+        self.width = ng_width
+        self.resolution = ng_resolution
+
+        (x, y) = self.origin
+        self.cellOrigin = (x + ng_resolution/2, y + ng_resolution/2)
 
 class PathFinder:
     def __init__(self, start, goal):
@@ -271,15 +387,16 @@ class PathFinder:
                 return True
 
             for neighbor in grid.getNeighbors(current):
-                new_cost = self.cost_so_far[current] + Grid.getPathCost(current, neighbor)
+                new_cost = self.cost_so_far[current] + grid.getPathCost(current, neighbor)
                 if neighbor not in self.cost_so_far or new_cost < self.cost_so_far[neighbor]:
                     self.cost_so_far[neighbor] = new_cost
-                    priority = new_cost + Grid.getHeuristic(neighbor, self.goal)
+                    priority = new_cost + grid.getHeuristic(neighbor, self.goal)
                     self.frontier.put(neighbor, priority)
                     self.parent[neighbor] = current
 
         return False
 
+    #Finds path from goal to destination after all cells were expanded
     def findPath(self):
         current = self.goal
 
@@ -290,6 +407,7 @@ class PathFinder:
         self.path.append(current)
         self.path.reverse()
 
+    #Extracts waypoints from the path
     def calculateWaypoints(self):
         if len(self.path) <= 1:
             raise Exception("Error: Cannot extract waypoints from the empty path or path that consists of only one coordinate!")
@@ -315,17 +433,19 @@ class CellType:
     Obstacle = 100
 
 #Processes the received occupancy grid message.
-def processOccupancyGrid(gridMessage):
-    grid = Grid(originalGridMessage.data, gridMessage.info.height, gridMessage.info.width, gridMessage.info.resolution,
+def processOccupancyGrid(gridMessage, scaleFactor, cacheEmptyCells):
+    grid = OccupancyGrid(gridMessage.data, gridMessage.info.height, gridMessage.info.width, gridMessage.info.resolution,
                 (gridMessage.info.origin.position.x, gridMessage.info.origin.position.y))
-    grid.scaleMap(4)
+    grid.scale(scaleFactor, cacheEmptyCells=cacheEmptyCells)
     grid.expandObstacles()
 
     return grid
 
-def processCostGrid(gridMessage, result_queue):
-    #TODO: add the implementation of this function
-    #return the result using the following: result_queue.put(result)
+def processCostGrid(gridMessage, scaleFactor, result_queue):
+    costGrid = CostGrid(gridMessage.data, gridMessage.info.height, gridMessage.info.width, gridMessage.info.resolution,
+                (gridMessage.info.origin.position.x, gridMessage.info.origin.position.y))
+    costGrid.scale(scaleFactor)
+    result_queue.put(costGrid)
     pass
 
 #Callback function that processes the initial position received.
@@ -421,14 +541,11 @@ def getWaypoints(req):
 
 #Gets the centroid of the largest frontier
 def getCentroid(req):
-    global originalGridMessage
     global grid
 
     print "Received centroid request."
 
-    originalGridMessage = req.map
-
-    grid = processOccupancyGrid(originalGridMessage)
+    grid = processOccupancyGrid(req.map, SCALE_FACTOR, True)
 
     foundCentroid = True
 
@@ -540,29 +657,29 @@ def calculateCentroid(cluster):
     return (centroidX, centroidY)
 
 def getTrajectory(req):
-    global originalGridMessage
     global grid
 
     print "Received trajectory request."
 
-    originalGridMessage = req.map
-
     #Start the thread for the centroid finding logic
-    # if req.processCostMap.data:
-    #     result_queue = Queue.Queue()
-    #     thread1 = threading.Thread(
-    #             target=processCostGrid,
-    #             name="ProcessCostGrid() Thread",
-    #             args=[req.costMap, result_queue],
-    #             )
-    #     thread1.start()
+    if req.processCostMap.data:
+        #Make sure that the occupancy grid and the cost map have the same resolution
+        costGrid_scaleFactor = SCALE_FACTOR * (req.costMap.info.resolution / req.map.info.resolution)
 
-    grid = processOccupancyGrid(originalGridMessage)
+        result_queue = Queue.Queue()
+        thread1 = threading.Thread(
+                target=processCostGrid,
+                name="ProcessCostGrid() Thread",
+                args=[req.costMap, costGrid_scaleFactor, result_queue],
+                )
+        thread1.start()
 
-    # if req.processCostMap:
-    #     thread1.join()
-    #     #costGrid = result_queue.get()
-    #     #grid.addCostGrid(costGrid) -- TODO: Add similar method to the grid class
+    grid = processOccupancyGrid(req.map, SCALE_FACTOR, False) #We do not need to cache empty cells for trajectory calculation
+
+    if req.processCostMap.data:
+        thread1.join()
+        costGrid = result_queue.get()
+        grid.addCostGrid(costGrid)
 
     #Meanwhile fine the path using A star in the main thread
     waypoints = getWaypoints(req)

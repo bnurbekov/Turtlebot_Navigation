@@ -396,16 +396,8 @@ class PathFinder:
 
         return False
 
-    #Finds path from goal to destination after all cells were expanded
     def findPath(self):
-        current = self.goal
-
-        while current != self.start:
-            self.path.append(current)
-            current = self.parent[current]
-
-        self.path.append(current)
-        self.path.reverse()
+        self.path = PathFinder.findPath(self.start, self.goal, self.parent)
 
     #Extracts waypoints from the path
     def calculateWaypoints(self):
@@ -425,6 +417,48 @@ class PathFinder:
                 lastYDiff = yDiff
 
         self.waypoints.append(self.path[len(self.path) - 1])
+
+        #Finds path from goal to destination after all cells were expanded
+    @staticmethod
+    def findPath(start, goal, parent):
+        path = []
+        current = goal
+
+        while current != start:
+            path.append(current)
+            current = parent[current]
+
+        path.append(current)
+        path.reverse()
+
+        return path
+
+    #TODO: Check this implementation if it works correctly!!!
+    @staticmethod
+    #Returns the path to the closest cell with value until all the cell with goal value is found is found
+    def findPathToCellWithValue(grid, start, goalCellValue):
+        visited = set()
+        queue = PriorityQueue()
+        parent = {}
+        queue.put(start, 0)
+
+        while queue:
+            tuple = heapq.heappop(queue.elements)
+
+            path_cost = tuple[0]
+            current = tuple[1]
+
+            if grid.getCellValue(current) == goalCellValue:
+                return PathFinder.findPath(start, current, parent)
+
+            if current not in visited:
+                visited.add(current)
+
+                neighbors = grid.getNeighbors(current)
+
+                for neighbor in neighbors:
+                    queue.put(neighbor, path_cost + 1)
+                    parent[neighbor] = current
 
 #A class that has a function of cell type enumeration.
 class CellType:

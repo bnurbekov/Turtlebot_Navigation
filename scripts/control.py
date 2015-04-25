@@ -92,6 +92,9 @@ class RobotControl:
 
         while (current_x > destination_x + self.pos_tolerance or current_x < destination_x - self.pos_tolerance) \
             or (current_y > destination_y + self.pos_tolerance or current_y < destination_y - self.pos_tolerance):
+            if isNewTrajectoryReady:
+                break
+
             destination_angle = math.atan2(destination_y - current_y, destination_x - current_x)
 
             #If there is a new set point, then reset the derivator and integrator
@@ -125,6 +128,9 @@ class RobotControl:
         rate = rospy.Rate(self.update_rate)
 
         while abs(error) > self.angle_tolerance:
+            if isNewTrajectoryReady:
+                break
+
             error = RobotControl.normalize_angle(destination_angle - current_theta)
 
             feed = yaw_control.update(error)
@@ -229,7 +235,11 @@ def requestTrajectory(goalPos):
         if not PROCESS_COSTMAP:
             costMap = OccupancyGrid()
 
-        trajectory = getTrajectory(initPos, goalPos, map, Bool(data=PROCESS_COSTMAP), costMap)
+        try:
+            trajectory = getTrajectory(initPos, goalPos, map, Bool(data=PROCESS_COSTMAP), costMap)
+        except rospy.ServiceException, e:
+            print "getTrajectory() call failed: %s" % e
+            continue
 
         #Check if the previous trajectory was defined
         try:
@@ -288,7 +298,12 @@ def exploreEnvironment():
 
         #2) Request new centroid
         print "2) Requesting new centroid."
-        centroidResponse = getCentroid(map)
+        try:
+            centroidResponse = getCentroid(map)
+        except rospy.ServiceException, e:
+            print "getCentroid() call failed: %s" % e
+            continue
+
         if not centroidResponse.foundCentroid.data:
             #We are done, exit.
             break

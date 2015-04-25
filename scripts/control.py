@@ -218,6 +218,7 @@ def requestTrajectory(goalPos):
     global isNewTrajectoryReady
     global previousTrajectory
     global trajectory
+    global reachedGoal
 
     while not reachedGoal and not rospy.is_shutdown():
         if not receivedNewMap:
@@ -239,7 +240,8 @@ def requestTrajectory(goalPos):
             trajectory = getTrajectory(initPos, goalPos, map, Bool(data=PROCESS_COSTMAP), costMap)
         except rospy.ServiceException, e:
             print "getTrajectory() call failed: %s" % e
-            continue
+            reachedGoal = True # Just exit the execution of this trajectory to be able to navigate to a new goal
+            break
 
         #Check if the previous trajectory was defined
         try:

@@ -95,10 +95,6 @@ class Grid:
     def scale(self, scaleFactor):
         raise NotImplementedError("scale() method is not implemented!")
 
-    #Abstract method that returns the neighbor cells.
-    def getNeighbors(self, cell):
-        raise NotImplementedError("getNeighbors() method is not implemented!")
-
     #Populates the set with cells that have the given value
     @staticmethod
     def populateSetWithCells(grid, set, value):
@@ -120,7 +116,7 @@ class OccupancyGrid(Grid):
         self.costGrid = None
 
     #Gets neighbors of the specific cell
-    def getNeighbors(self, cell):
+    def getNeighbors(self, cell, includeObstacles=False):
         neighborList = []
 
         (x, y) = cell
@@ -129,8 +125,12 @@ class OccupancyGrid(Grid):
             for j in range(0, 3):
                 neighborCell = (x - 1 + j, y - 1 + i)
 
-                if self.isWithinGrid(neighborCell) and cell != neighborCell and self.getCellValue(neighborCell) != CellType.Obstacle:
-                    neighborList.append(neighborCell)
+                if includeObstacles:
+                    if self.isWithinGrid(neighborCell) and cell != neighborCell:
+                        neighborList.append(neighborCell)
+                else:
+                    if self.isWithinGrid(neighborCell) and cell != neighborCell and self.getCellValue(neighborCell) != CellType.Obstacle:
+                        neighborList.append(neighborCell)
 
         return neighborList
 
@@ -418,7 +418,7 @@ class PathFinder:
 
         self.waypoints.append(self.path[len(self.path) - 1])
 
-        #Finds path from goal to destination after all cells were expanded
+    #Finds path from goal to destination after all cells were expanded
     @staticmethod
     def findPath(start, goal, parent):
         path = []
@@ -434,9 +434,9 @@ class PathFinder:
         return path
 
     #TODO: Check this implementation if it works correctly!!!
-    @staticmethod
     #Returns the path to the closest cell with value until all the cell with goal value is found is found
-    def findPathToCellWithValue(grid, start, goalCellValue):
+    @staticmethod
+    def findPathToCellWithValueClosestTo(grid, start, goalCellValues, goal):
         visited = set()
         queue = PriorityQueue()
         parent = {}
@@ -448,13 +448,32 @@ class PathFinder:
             path_cost = tuple[0]
             current = tuple[1]
 
-            if grid.getCellValue(current) == goalCellValue:
-                return PathFinder.findPath(start, current, parent)
+            if grid.getCellValue(current) in goalCellValues:
+                bestCellSoFar = current
+                bestCellHeuristics = grid.getHeuristic(current, goal)
+
+                #pop next cells with the same path cost
+                next_path_cost = path_cost
+
+                #find the cell with the same path cost, but better heuristic
+                while path_cost == next_path_cost:
+                    tuple = heapq.heappop(queue.elements)
+
+                    next_path_cost = tuple[0]
+                    next = tuple[1]
+
+                    tempHeuristics = grid.getHeuristic(next)
+
+                    if tempHeuristics < bestCellHeuristics:
+                        bestCellHeuristics = tempHeuristics
+                        bestCellSoFar = next
+
+                return PathFinder.findPath(start, bestCellSoFar, parent)
 
             if current not in visited:
                 visited.add(current)
 
-                neighbors = grid.getNeighbors(current)
+                neighbors = grid.getNeighbors(current, includeObstacles=True)
 
                 for neighbor in neighbors:
                     queue.put(neighbor, path_cost + 1)
@@ -528,10 +547,52 @@ def createGridCellsMessage(gridResolution):
 
     return gridCells
 
+def getTrajectory(req):
+    global grid
+
+    print "Received trajectory request."
+
+    #Start the thread for the centroid finding logic
+    if req.processCostMap.data:
+        #Make sure that the occupancy grid and the cost map have the same resolution
+        costGrid_scaleFactor = SCALE_FACTOR * (req.costMap.info.resolution / req.map.info.resolution)
+
+        result_queue = Queue.Queue()
+        thread1 = threading.Thread(
+                target=processCostGrid,
+                name="ProcessCostGrid() Thread",
+                args=[req.costMap, costGrid_scaleFactor, result_queue],
+                )
+        thread1.start()
+
+    grid = processOccupancyGrid(req.map, SCALE_FACTOR, False) #We do not need to cache empty cells for trajectory calculation
+
+    if req.processCostMap.data:
+        thread1.join()
+        costGrid = result_queue.get()
+        grid.addCostGrid(costGrid)
+
+    #Meanwhile fine the path using A star in the main thread
+    waypoints = getWaypoints(req, grid)
+
+    print "Done with the trajectory request processing!"
+
+    return TrajectoryResponse(waypoints)
+
+
 #TODO: possibly create a new class that will contain this service method
-def getWaypoints(req):
+def getWaypoints(req, grid):
     startCell = convertPointToCell(req.initPos, grid.origin, grid.resolution)
     goalCell = convertPointToCell(req.goalPos, grid.origin, grid.resolution)
+
+    #Logic that gets the robot out of an obstacle (failure recovery)
+    if grid.getCellValue(startCell) == CellType.Obstacle:
+        cellTypes = set()
+        cellTypes.add(CellType.Empty)
+        cellTypes.add(CellType.Unexplored)
+        pathOutOfObstacle = PathFinder.findPathToCellWithValueClosestTo(startCell, cellTypes, goalCell)
+
+        startCell = pathOutOfObstacle.pop(len(pathOutOfObstacle) - 1)
 
     pathFinder = PathFinder(startCell, goalCell)
 
@@ -556,6 +617,14 @@ def getWaypoints(req):
         publishGridCells(frontier_cell_pub, frontierCells, grid.resolution, grid.cellOrigin)
 
         pathFinder.findPath()
+
+        #if robot was at an obstacle cell before, then prepend the path out of the obstacle
+        try:
+            pathOutOfObstacle
+        except NameError:
+            pass
+        else:
+            pathFinder.path = pathOutOfObstacle.extend(pathFinder.path)
 
         publishGridCells(path_cell_pub, pathFinder.path, grid.resolution, grid.cellOrigin)
 
@@ -689,38 +758,6 @@ def calculateCentroid(cluster):
     centroidY = int(round(centroidY / clusterSize))
 
     return (centroidX, centroidY)
-
-def getTrajectory(req):
-    global grid
-
-    print "Received trajectory request."
-
-    #Start the thread for the centroid finding logic
-    if req.processCostMap.data:
-        #Make sure that the occupancy grid and the cost map have the same resolution
-        costGrid_scaleFactor = SCALE_FACTOR * (req.costMap.info.resolution / req.map.info.resolution)
-
-        result_queue = Queue.Queue()
-        thread1 = threading.Thread(
-                target=processCostGrid,
-                name="ProcessCostGrid() Thread",
-                args=[req.costMap, costGrid_scaleFactor, result_queue],
-                )
-        thread1.start()
-
-    grid = processOccupancyGrid(req.map, SCALE_FACTOR, False) #We do not need to cache empty cells for trajectory calculation
-
-    if req.processCostMap.data:
-        thread1.join()
-        costGrid = result_queue.get()
-        grid.addCostGrid(costGrid)
-
-    #Meanwhile fine the path using A star in the main thread
-    waypoints = getWaypoints(req)
-
-    print "Done with the trajectory request processing!"
-
-    return TrajectoryResponse(waypoints)
 
 # This is the program's main function
 if __name__ == '__main__':

@@ -462,13 +462,13 @@ class PathFinder:
                     next_path_cost = tuple[0]
                     next = tuple[1]
 
-                    tempHeuristics = grid.getHeuristic(next)
+                    tempHeuristics = grid.getHeuristic(next, goal)
 
-                    if tempHeuristics < bestCellHeuristics:
+                    if tempHeuristics < bestCellHeuristics and next in goalCellValues:
                         bestCellHeuristics = tempHeuristics
                         bestCellSoFar = next
 
-                return PathFinder.findPath(start, bestCellSoFar, parent)
+                    return PathFinder.getPath(start, bestCellSoFar, parent)
 
             if current not in visited:
                 visited.add(current)
@@ -590,7 +590,7 @@ def getWaypoints(req, grid):
         cellTypes = set()
         cellTypes.add(CellType.Empty)
         cellTypes.add(CellType.Unexplored)
-        pathOutOfObstacle = PathFinder.findPathToCellWithValueClosestTo(startCell, cellTypes, goalCell)
+        pathOutOfObstacle = PathFinder.findPathToCellWithValueClosestTo(grid, startCell, cellTypes, goalCell)
 
         startCell = pathOutOfObstacle.pop(len(pathOutOfObstacle) - 1)
 

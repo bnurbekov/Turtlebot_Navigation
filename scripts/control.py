@@ -14,7 +14,7 @@ WHEEL_RADIUS = 0.035
 DISTANCE_BETWEEN_WHEELS = 0.23
 POS_TOLERANCE = 0.1
 ANGLE_TOLERANCE = 0.05
-POS_REQUEST_RATE = 10.0
+POS_REQUEST_RATE = 100.0
 PROCESS_COSTMAP = False
 ROTATE_AROUND_GRANULARITY = 9
 LINEAR_VELOCITY = 0.4
@@ -84,7 +84,7 @@ class RobotControl:
 
     #Goes to the desired position
     def goToPosition(self, speed, destination_x, destination_y):
-        yaw_control = PID(P=4, I=0.0001, D=0.001, Derivator=0, Integrator=0, outMin=-4, outMax=4)
+        yaw_control = PID(P=5, I=0.01, D=0.001, Derivator=0, Integrator=0, outMin=-6, outMax=6)
 
         prev_destination_angle = math.atan2(destination_y - current_y, destination_x - current_x)
 
@@ -121,7 +121,7 @@ class RobotControl:
 
     #Rotates to the specified angle in the global coordinate frame
     def rotateToAngle(self, destination_angle):
-        yaw_control = PID(P=1.5, I=0.0001, D=0.001, Derivator=0, Integrator=0, outMin=-4, outMax=4)
+        yaw_control = PID(P=5, I=0.01, D=0.001, Derivator=0, Integrator=0, outMin=-6, outMax=6)
 
         error = RobotControl.normalize_angle(destination_angle - current_theta)
 
@@ -219,6 +219,7 @@ def requestTrajectory(goalPos):
     global previousTrajectory
     global trajectory
     global reachedGoal
+    global abnormalTermination
 
     while not reachedGoal and not rospy.is_shutdown():
         if not receivedNewMap:
@@ -241,6 +242,8 @@ def requestTrajectory(goalPos):
         except rospy.ServiceException, e:
             print "getTrajectory() call failed: %s" % e
             reachedGoal = True # Just exit the execution of this trajectory to be able to navigate to a new goal
+            isNewTrajectoryReady = True # Interrupt execution of the current trajectory
+            abnormalTermination = True
             break
 
         #Check if the previous trajectory was defined
@@ -293,6 +296,10 @@ def exploreEnvironment():
     control = RobotControl(teleop_pub, POS_REQUEST_RATE, ROTATE_AROUND_GRANULARITY, ANGLE_TOLERANCE, POS_TOLERANCE)
 
     while not rospy.is_shutdown():
+        if abnormalTermination:
+            abnormalTermination = False
+            rospy.sleep(0.5)
+
         #1) Rotate 360 degrees to initially explore the world around
         print "=====> Started new iteration <====="
         print "1) Rotating 360."
@@ -304,6 +311,7 @@ def exploreEnvironment():
             centroidResponse = getCentroid(map)
         except rospy.ServiceException, e:
             print "getCentroid() call failed: %s" % e
+            abnormalTermination = True
             continue
 
         if not centroidResponse.foundCentroid.data:
@@ -350,6 +358,7 @@ if __name__ == "__main__":
     #Flag
     global isNewTrajectoryReady
     global reachedGoal
+    global abnormalTermination
 
     #Flag that indicate whether the local goal was defined
     global wasLocalGoalDefined
@@ -363,6 +372,7 @@ if __name__ == "__main__":
     isNewTrajectoryReady = False
     receivedInitPos = False
     receivedNewMap = False
+    abnormalTermination = False
 
     #Subscribe to map updates
     map_sub = rospy.Subscriber('/map', OccupancyGrid, mapCallback, queue_size=1)
@@ -380,7 +390,7 @@ if __name__ == "__main__":
     print "Started exploration."
 
     # control = RobotControl(rospy.Publisher('/cmd_vel_mux/input/teleop', Twist, queue_size=5), POS_REQUEST_RATE, ROTATE_AROUND_GRANULARITY, ANGLE_TOLERANCE, POS_TOLERANCE)
-    # control.goToPositionInAStraightLine(0.5, current_x + 1, current_y + 1)
+    # control.goToPosition(LINEAR_VELOCITY, current_x + 2, current_y + 2)
 
     exploreEnvironment()
 

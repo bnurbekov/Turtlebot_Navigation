@@ -397,7 +397,7 @@ class PathFinder:
         return False
 
     def findPath(self):
-        self.path = PathFinder.findPath(self.start, self.goal, self.parent)
+        self.path = PathFinder.getPath(self.start, self.goal, self.parent)
 
     #Extracts waypoints from the path
     def calculateWaypoints(self):
@@ -420,7 +420,7 @@ class PathFinder:
 
     #Finds path from goal to destination after all cells were expanded
     @staticmethod
-    def findPath(start, goal, parent):
+    def getPath(start, goal, parent):
         path = []
         current = goal
 

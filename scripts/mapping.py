@@ -240,8 +240,8 @@ class OccupancyGrid(Grid):
                             "resolution than the occupancy grid.")
 
         #Warning: The offset calculation
-        self.costGridCellOffset = (int((costGrid[0] - self.cellOrigin[0]) / self.resolution),
-                                   int((costGrid[1] - self.cellOrigin[1]) / self.resolution))
+        self.costGridCellOffset = (int((costGrid.cellOrigin[0] - self.cellOrigin[0]) / self.resolution),
+                                   int((costGrid.cellOrigin[1] - self.cellOrigin[1]) / self.resolution))
 
     #Gets heuristic relevant to the current grid
     def getHeuristic(self, currentCell, destinationCell):
@@ -449,26 +449,26 @@ class PathFinder:
             current = tuple[1]
 
             if grid.getCellValue(current) in goalCellValues:
-                bestCellSoFar = current
-                bestCellHeuristics = grid.getHeuristic(current, goal)
+                # bestCellSoFar = current
+                # bestCellHeuristics = grid.getHeuristic(current, goal)
+                #
+                # #pop next cells with the same path cost
+                # next_path_cost = path_cost
+                #
+                # #find the cell with the same path cost, but better heuristic
+                # while path_cost == next_path_cost:
+                #     tuple = heapq.heappop(queue.elements)
+                #
+                #     next_path_cost = tuple[0]
+                #     next = tuple[1]
+                #
+                #     tempHeuristics = grid.getHeuristic(next, goal)
+                #
+                #     if tempHeuristics < bestCellHeuristics and next in goalCellValues:
+                #         bestCellHeuristics = tempHeuristics
+                #         bestCellSoFar = next
 
-                #pop next cells with the same path cost
-                next_path_cost = path_cost
-
-                #find the cell with the same path cost, but better heuristic
-                while path_cost == next_path_cost:
-                    tuple = heapq.heappop(queue.elements)
-
-                    next_path_cost = tuple[0]
-                    next = tuple[1]
-
-                    tempHeuristics = grid.getHeuristic(next, goal)
-
-                    if tempHeuristics < bestCellHeuristics and next in goalCellValues:
-                        bestCellHeuristics = tempHeuristics
-                        bestCellSoFar = next
-
-                    return PathFinder.getPath(start, bestCellSoFar, parent)
+                return PathFinder.getPath(start, current, parent)
 
             if current not in visited:
                 visited.add(current)
@@ -555,7 +555,7 @@ def getTrajectory(req):
     #Start the thread for the centroid finding logic
     if req.processCostMap.data:
         #Make sure that the occupancy grid and the cost map have the same resolution
-        costGrid_scaleFactor = SCALE_FACTOR * (req.costMap.info.resolution / req.map.info.resolution)
+        costGrid_scaleFactor = int(SCALE_FACTOR * (req.costMap.info.resolution / req.map.info.resolution))
 
         result_queue = Queue.Queue()
         thread1 = threading.Thread(
@@ -592,6 +592,8 @@ def getWaypoints(req, grid):
         cellTypes.add(CellType.Unexplored)
         pathOutOfObstacle = PathFinder.findPathToCellWithValueClosestTo(grid, startCell, cellTypes, goalCell)
 
+        print "The robot is inside the obstacle! Trying to find the shortest way out..."
+
         startCell = pathOutOfObstacle.pop(len(pathOutOfObstacle) - 1)
 
     pathFinder = PathFinder(startCell, goalCell)
@@ -624,7 +626,8 @@ def getWaypoints(req, grid):
         except NameError:
             pass
         else:
-            pathFinder.path = pathOutOfObstacle.extend(pathFinder.path)
+            pathOutOfObstacle.extend(pathFinder.path)
+            pathFinder.path = pathOutOfObstacle
 
         publishGridCells(path_cell_pub, pathFinder.path, grid.resolution, grid.cellOrigin)
 

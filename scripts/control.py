@@ -14,10 +14,10 @@ WHEEL_RADIUS = 0.035
 DISTANCE_BETWEEN_WHEELS = 0.23
 POS_TOLERANCE = 0.1
 ANGLE_TOLERANCE = 0.05
-POS_REQUEST_RATE = 100.0
+POS_REQUEST_RATE = 10.0
 PROCESS_COSTMAP = False
 ROTATE_AROUND_GRANULARITY = 9
-LINEAR_VELOCITY = 0.4
+LINEAR_VELOCITY = 0.10
 
 #Impelements PID controller
 class PID:
@@ -84,14 +84,18 @@ class RobotControl:
 
     #Goes to the desired position
     def goToPosition(self, speed, destination_x, destination_y):
-        yaw_control = PID(P=5, I=0.01, D=0.001, Derivator=0, Integrator=0, outMin=-6, outMax=6)
+        yaw_control = PID(P=1, I=0.001, D=0.001, Derivator=0, Integrator=0, outMin=-1.5, outMax=1.5)
 
         prev_destination_angle = math.atan2(destination_y - current_y, destination_x - current_x)
+        initialDistance = math.sqrt((destination_x - current_x)**2 + (destination_y - current_y)**2)
+        initial_x = current_x
+        initial_y = current_y
 
         rate = rospy.Rate(self.update_rate)
 
-        while (current_x > destination_x + self.pos_tolerance or current_x < destination_x - self.pos_tolerance) \
-            or (current_y > destination_y + self.pos_tolerance or current_y < destination_y - self.pos_tolerance):
+        while ((current_x > destination_x + self.pos_tolerance or current_x < destination_x - self.pos_tolerance) \
+            or (current_y > destination_y + self.pos_tolerance or current_y < destination_y - self.pos_tolerance)) \
+            and not math.sqrt((current_x - initial_x)**2 + (current_y - initial_y)**2) > initialDistance:
             if isNewTrajectoryReady:
                 break
 
@@ -121,16 +125,13 @@ class RobotControl:
 
     #Rotates to the specified angle in the global coordinate frame
     def rotateToAngle(self, destination_angle):
-        yaw_control = PID(P=5, I=0.01, D=0.001, Derivator=0, Integrator=0, outMin=-6, outMax=6)
+        yaw_control = PID(P=1.5, I=0.01, D=0.001, Derivator=0, Integrator=0, outMin=-6, outMax=6)
 
         error = RobotControl.normalize_angle(destination_angle - current_theta)
 
         rate = rospy.Rate(self.update_rate)
 
         while abs(error) > self.angle_tolerance:
-            if isNewTrajectoryReady:
-                break
-
             error = RobotControl.normalize_angle(destination_angle - current_theta)
 
             feed = yaw_control.update(error)
@@ -212,21 +213,36 @@ def mapCallback(mapMessage):
 
     receivedNewMap = True
 
+#Callback function that processes the OccupancyGrid message.
+def costmapCallback(costMapMessage):
+    global costMap
+    global receivedNewCostMap
+
+    #Store the costmapMessage as global in order for the requestTrajectory function to use it.
+    costMap = costMapMessage
+
+    receivedNewCostMap = True
+
 #Processes the received map.
 def requestTrajectory(goalPos):
     global receivedNewMap
+    global receivedNewCostMap
     global isNewTrajectoryReady
     global previousTrajectory
     global trajectory
     global reachedGoal
     global abnormalTermination
+    global costMap
 
     while not reachedGoal and not rospy.is_shutdown():
         if not receivedNewMap:
             continue
         else:
             #Reset flag
-            receivedNewMap = False
+            if receivedNewMap:
+                receivedNewMap = False
+            # if receivedNewCostMap:
+            #     receivedNewCostMap = False
 
         #Request new trajectory
         initPos = Point()
@@ -292,6 +308,8 @@ def executeTrajectory(control):
 
 #Executes the main task of exploring the world around
 def exploreEnvironment():
+    global abnormalTermination
+
     teleop_pub = rospy.Publisher('/cmd_vel_mux/input/teleop', Twist, queue_size=5)
     control = RobotControl(teleop_pub, POS_REQUEST_RATE, ROTATE_AROUND_GRANULARITY, ANGLE_TOLERANCE, POS_TOLERANCE)
 
@@ -354,6 +372,7 @@ if __name__ == "__main__":
     #Flags that indicate if the initial or goal positions were received
     global receivedInitPos
     global receivedNewMap
+    global receivedNewCostMap
 
     #Flag
     global isNewTrajectoryReady
@@ -373,15 +392,17 @@ if __name__ == "__main__":
     receivedInitPos = False
     receivedNewMap = False
     abnormalTermination = False
+    receivedNewCostMap = True
 
     #Subscribe to map updates
     map_sub = rospy.Subscriber('/map', OccupancyGrid, mapCallback, queue_size=1)
+    # costmap_sub = rospy.Subscriber('/move_base/local_costmap/costmap', OccupancyGrid, costmapCallback, queue_size=1)
     #Start requesting position in background
     Thread(target=request_pos_at_rate, name="Request_pos_at_rate Thread", args=[POS_REQUEST_RATE]).start()
 
     print "Waiting for the initial position from tf...",
 
-    while not receivedInitPos or not receivedNewMap:
+    while not receivedInitPos or not receivedNewMap or not receivedNewCostMap:
         rospy.sleep(.1)
         pass
 

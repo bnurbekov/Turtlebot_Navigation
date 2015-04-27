@@ -398,14 +398,7 @@ class PathFinder:
         return False
 
     def findPath(self):
-        current = self.goal
-
-        while current != self.start:
-            self.path.append(current)
-            current = self.parent[current]
-
-        self.path.append(current)
-        self.path.reverse()
+        self.path = PathFinder.getPath(self.start, self.goal, self.parent)
 
     #Extracts waypoints from the path
     def calculateWaypoints(self):
@@ -425,6 +418,69 @@ class PathFinder:
                 lastYDiff = yDiff
 
         self.waypoints.append(self.path[len(self.path) - 1])
+
+    @staticmethod
+    def getPath(start, goal, parent):
+        path = []
+        current = goal
+
+        while current != start:
+            path.append(current)
+            current = parent[current]
+
+        path.append(current)
+        path.reverse()
+
+        return path
+
+    @staticmethod
+    def findPathToCellWithValueClosestTo(grid, start, goalCellValues, goal):
+        visited = set()
+        queue = PriorityQueue()
+        parent = {}
+        queue.put(start, 0)
+
+        while queue:
+            tuple = heapq.heappop(queue.elements)
+
+            path_cost = tuple[0]
+            current = tuple[1]
+
+            # print "Popped: ", current, "Path cost -", path_cost, "Cell value -", grid.getCellValue(current)
+
+            if grid.getCellValue(current) in goalCellValues:
+                bestCellSoFar = current
+                bestCellHeuristics = grid.getHeuristic(current, goal)
+
+                #pop next cells with the same path cost
+                next_path_cost = path_cost
+
+                #find the cell with the same path cost, but better heuristic
+                while path_cost == next_path_cost and not queue.empty():
+                    tuple = heapq.heappop(queue.elements)
+
+                    next_path_cost = tuple[0]
+                    next = tuple[1]
+
+                    tempHeuristics = grid.getHeuristic(next, goal)
+
+                    if tempHeuristics < bestCellHeuristics and next in goalCellValues:
+                        bestCellHeuristics = tempHeuristics
+                        bestCellSoFar = next
+
+                #Return path out of obstacle
+                return PathFinder.getPath(start, bestCellSoFar, parent)
+            else:
+                neighbors = grid.getNeighbors(current, includeObstacles=True)
+
+                # print "Adding neighbors!"
+                for neighbor in neighbors:
+                    # print "Neighbor: ", neighbor, "Cell value -", grid.getCellValue(neighbor)
+                    if neighbor not in visited:
+                        # print "Neighbor was added!"
+                        queue.put(neighbor, path_cost + 1)
+                        parent[neighbor] = current
+                        visited.add(neighbor)
 
 #A class that has a function of cell type enumeration.
 class CellType:
@@ -512,73 +568,29 @@ def getTrajectory(req):
                 )
         thread1.start()
 
+    print "Processing occupancy grid...",
+
     grid = processOccupancyGrid(req.map, SCALE_FACTOR, False) #We do not need to cache empty cells for trajectory calculation
+
+    print "DONE"
 
     if req.processCostMap.data:
         thread1.join()
         costGrid = result_queue.get()
         grid.addCostGrid(costGrid)
 
+    print "Getting waypoints...",
+
     #Meanwhile fine the path using A star in the main thread
     waypoints = getWaypoints(req, grid)
+
+    print "DONE"
 
     print "Done with the trajectory request processing!"
 
     gc.collect()
 
     return TrajectoryResponse(waypoints)
-
-def findPathToCellWithValueClosestTo(grid, start, goalCellValues, goal):
-    visited = set()
-    queue = PriorityQueue()
-    parent = {}
-    queue.put(start, 0)
-
-    while queue:
-        tuple = heapq.heappop(queue.elements)
-
-        path_cost = tuple[0]
-        current = tuple[1]
-
-        if grid.getCellValue(current) in goalCellValues:
-            bestCellSoFar = current
-            bestCellHeuristics = grid.getHeuristic(current, goal)
-
-            #pop next cells with the same path cost
-            next_path_cost = path_cost
-
-            #find the cell with the same path cost, but better heuristic
-            while path_cost == next_path_cost:
-                tuple = heapq.heappop(queue.elements)
-
-                next_path_cost = tuple[0]
-                next = tuple[1]
-
-                tempHeuristics = grid.getHeuristic(next, goal)
-
-                if tempHeuristics < bestCellHeuristics and next in goalCellValues:
-                    bestCellHeuristics = tempHeuristics
-                    bestCellSoFar = next
-
-            #Return path out of obstacle
-            temp = bestCellSoFar
-            path = []
-
-            while temp != start:
-                path.append(current)
-                current = parent[current]
-
-            path.append(current)
-            path.reverse()
-
-        if current not in visited:
-            visited.add(current)
-
-            neighbors = grid.getNeighbors(current, includeObstacles=True)
-
-            for neighbor in neighbors:
-                queue.put(neighbor, path_cost + 1)
-                parent[neighbor] = current
 
 #TODO: possibly create a new class that will contain this service method
 def getWaypoints(req, grid):
@@ -587,12 +599,11 @@ def getWaypoints(req, grid):
 
     #Logic that gets the robot out of an obstacle (failure recovery)
     if grid.getCellValue(startCell) == CellType.Obstacle:
+        print "The robot is inside the obstacle! Trying to find the shortest way out..."
         cellTypes = set()
         cellTypes.add(CellType.Empty)
         cellTypes.add(CellType.Unexplored)
         pathOutOfObstacle = PathFinder.findPathToCellWithValueClosestTo(grid, startCell, cellTypes, goalCell)
-
-        print "The robot is inside the obstacle! Trying to find the shortest way out..."
 
         startCell = pathOutOfObstacle.pop(len(pathOutOfObstacle) - 1)
 

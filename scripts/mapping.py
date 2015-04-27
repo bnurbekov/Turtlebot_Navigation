@@ -6,6 +6,7 @@ from geometry_msgs.msg import Twist, Point, PoseStamped
 from nav_msgs.msg import Odometry, OccupancyGrid, MapMetaData, GridCells, Path
 from std_msgs.msg import Bool
 from final_project.srv import *
+import gc
 
 SCALE_FACTOR = 4
 
@@ -397,7 +398,14 @@ class PathFinder:
         return False
 
     def findPath(self):
-        self.path = PathFinder.getPath(self.start, self.goal, self.parent)
+        current = self.goal
+
+        while current != self.start:
+            self.path.append(current)
+            current = self.parent[current]
+
+        self.path.append(current)
+        self.path.reverse()
 
     #Extracts waypoints from the path
     def calculateWaypoints(self):
@@ -417,67 +425,6 @@ class PathFinder:
                 lastYDiff = yDiff
 
         self.waypoints.append(self.path[len(self.path) - 1])
-
-    #Finds path from goal to destination after all cells were expanded
-    @staticmethod
-    def getPath(start, goal, parent):
-        path = []
-        current = goal
-
-        while current != start:
-            path.append(current)
-            current = parent[current]
-
-        path.append(current)
-        path.reverse()
-
-        return path
-
-    #TODO: Check this implementation if it works correctly!!!
-    #Returns the path to the closest cell with value until all the cell with goal value is found is found
-    @staticmethod
-    def findPathToCellWithValueClosestTo(grid, start, goalCellValues, goal):
-        visited = set()
-        queue = PriorityQueue()
-        parent = {}
-        queue.put(start, 0)
-
-        while queue:
-            tuple = heapq.heappop(queue.elements)
-
-            path_cost = tuple[0]
-            current = tuple[1]
-
-            if grid.getCellValue(current) in goalCellValues:
-                # bestCellSoFar = current
-                # bestCellHeuristics = grid.getHeuristic(current, goal)
-                #
-                # #pop next cells with the same path cost
-                # next_path_cost = path_cost
-                #
-                # #find the cell with the same path cost, but better heuristic
-                # while path_cost == next_path_cost:
-                #     tuple = heapq.heappop(queue.elements)
-                #
-                #     next_path_cost = tuple[0]
-                #     next = tuple[1]
-                #
-                #     tempHeuristics = grid.getHeuristic(next, goal)
-                #
-                #     if tempHeuristics < bestCellHeuristics and next in goalCellValues:
-                #         bestCellHeuristics = tempHeuristics
-                #         bestCellSoFar = next
-
-                return PathFinder.getPath(start, current, parent)
-
-            if current not in visited:
-                visited.add(current)
-
-                neighbors = grid.getNeighbors(current, includeObstacles=True)
-
-                for neighbor in neighbors:
-                    queue.put(neighbor, path_cost + 1)
-                    parent[neighbor] = current
 
 #A class that has a function of cell type enumeration.
 class CellType:
@@ -577,8 +524,61 @@ def getTrajectory(req):
 
     print "Done with the trajectory request processing!"
 
+    gc.collect()
+
     return TrajectoryResponse(waypoints)
 
+def findPathToCellWithValueClosestTo(grid, start, goalCellValues, goal):
+    visited = set()
+    queue = PriorityQueue()
+    parent = {}
+    queue.put(start, 0)
+
+    while queue:
+        tuple = heapq.heappop(queue.elements)
+
+        path_cost = tuple[0]
+        current = tuple[1]
+
+        if grid.getCellValue(current) in goalCellValues:
+            bestCellSoFar = current
+            bestCellHeuristics = grid.getHeuristic(current, goal)
+
+            #pop next cells with the same path cost
+            next_path_cost = path_cost
+
+            #find the cell with the same path cost, but better heuristic
+            while path_cost == next_path_cost:
+                tuple = heapq.heappop(queue.elements)
+
+                next_path_cost = tuple[0]
+                next = tuple[1]
+
+                tempHeuristics = grid.getHeuristic(next, goal)
+
+                if tempHeuristics < bestCellHeuristics and next in goalCellValues:
+                    bestCellHeuristics = tempHeuristics
+                    bestCellSoFar = next
+
+            #Return path out of obstacle
+            temp = bestCellSoFar
+            path = []
+
+            while temp != start:
+                path.append(current)
+                current = parent[current]
+
+            path.append(current)
+            path.reverse()
+
+        if current not in visited:
+            visited.add(current)
+
+            neighbors = grid.getNeighbors(current, includeObstacles=True)
+
+            for neighbor in neighbors:
+                queue.put(neighbor, path_cost + 1)
+                parent[neighbor] = current
 
 #TODO: possibly create a new class that will contain this service method
 def getWaypoints(req, grid):
@@ -658,6 +658,8 @@ def getCentroid(req):
     visited = set()
     clusters = []
 
+    print "Started to look for clusters..."
+
     for cell in grid.empty:
         cluster = []
 
@@ -671,9 +673,15 @@ def getCentroid(req):
         # else:
         #     rospy.logdebug("---------> Cluster was not added!")
 
+    print "DONE"
+
+    print "Calculating centroid..."
+
     if len(clusters) == 0:
         centroidPos = Point()
         foundCentroid = False
+
+        print "Centroid was not found!"
     else:
         #Find the largest cluster in the list of clusters
         (largestClusterIndex, largestCluster) = max(enumerate(clusters), key = lambda tup: len(tup[1]))
@@ -699,7 +707,11 @@ def getCentroid(req):
 
         centroidPos = convertCellToPoint(centroid, grid.cellOrigin, grid.resolution)
 
+    print "DONE"
+
     print "Done with the centroid request processing!"
+
+    gc.collect()
 
     return CentroidResponse(Bool(data=foundCentroid), centroidPos)
 

@@ -135,6 +135,30 @@ class OccupancyGrid(Grid):
 
         return neighborList
 
+    #Gets neighbors of the specific cell
+    def getNeighborValues(self, cell):
+        neighbors = self.getNeighbors(cell, True)
+        neighborValues = []
+
+        for neighbor in neighbors:
+            neighborValue = self.getCellValue(neighbor)
+            neighborValues.append(neighborValue)
+
+        return neighborValues
+
+    #Gets neighbors and their respective values as list of tuples
+    def getNeighborValuePairs(self, cell):
+        neighbors = self.getNeighbors(cell, True)
+        neighborValuePairs = []
+
+        for neighbor in neighbors:
+            neighborValue = self.getCellValue(neighbor)
+            neighborValuePair = (neighbor, neighborValue)
+
+            neighborValuePairs.append(neighborValuePair)
+
+        return neighborValuePairs
+
     #Scales map to a new resolution
     def scale(self, scaleFactor, cacheEmptyCells=True, cacheObstacleCells=True):
         self.obstacles.clear()
@@ -482,6 +506,41 @@ class PathFinder:
                         parent[neighbor] = current
                         visited.add(neighbor)
 
+    @staticmethod
+    def findTheFirstCellNotSurroundedWith(grid, start, goalCellType, cellTypes):
+        visited = set()
+        queue = PriorityQueue()
+        queue.put(start, 0)
+
+        while queue:
+            tuple = heapq.heappop(queue.elements)
+
+            path_cost = tuple[0]
+            current = tuple[1]
+
+            neighborValuePairs = grid.getNeighborValuePairs(current)
+            neighborValues = [x[1] for x in neighborValuePairs]
+
+            notSurrounded = True
+
+            for neighborValue in neighborValues:
+                if neighborValue in cellTypes:
+                    notSurrounded = False
+
+            if notSurrounded:
+                return current
+            else:
+                neighborValuePairs = grid.getNeighborValuePairs(current)
+
+                for neighborValuePair in neighborValuePairs:
+                    (neighbor, neighborValue) = neighborValuePair
+
+                    if neighbor not in visited and neighborValue == goalCellType:
+                        queue.put(neighbor, path_cost + 1)
+                        visited.add(neighbor)
+
+        raise Exception("Was not able to find the cell not surrounded with cell types passed!")
+
 #A class that has a function of cell type enumeration.
 class CellType:
     Unexplored = -1
@@ -698,6 +757,15 @@ def getCentroid(req):
         (largestClusterIndex, largestCluster) = max(enumerate(clusters), key = lambda tup: len(tup[1]))
 
         centroid = calculateCentroid(largestCluster)
+        centroidValue = grid.getCellValue(centroid)
+
+        #if the centroid is inside the unexplored area or obstacle, then find the closest empty cell
+        if centroidValue == CellType.Obstacle or centroidValue == CellType.Unexplored:
+            path = PathFinder.findPathToCellWithValueClosestTo(grid, centroid, [CellType.Empty], (0, 0))
+            centroid = path.pop(len(path) - 1)
+
+        #if the centroid is on the border with the unexplored cell, then find the first empty cell that is not
+        centroid = PathFinder.findTheFirstCellNotSurroundedWith(grid, centroid, CellType.Empty, [CellType.Unexplored])
 
         clusterCells = []
         for cluster in clusters:

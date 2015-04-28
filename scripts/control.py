@@ -8,6 +8,7 @@ from final_project.srv import *
 from geometry_msgs.msg import Twist, Point
 from std_msgs.msg import Bool
 from tf.transformations import euler_from_quaternion
+from sensor_msgs.msg import LaserScan
 from threading import Thread
 
 WHEEL_RADIUS = 0.035
@@ -18,6 +19,7 @@ POS_REQUEST_RATE = 30.0
 PROCESS_COSTMAP = False
 ROTATE_AROUND_GRANULARITY = 9
 LINEAR_VELOCITY = 0.15
+OBSTACLE_DETECTION_THRESHOLD = 0.5
 
 #Impelements PID controller
 class PID:
@@ -126,7 +128,7 @@ class RobotControl:
 
     #Rotates to the specified angle in the global coordinate frame
     def rotateToAngle(self, destination_angle):
-        angular_vel = 0.5
+        angular_vel = 0.7
 
         if destination_angle > current_theta:
             if destination_angle - current_theta < math.pi:
@@ -243,6 +245,12 @@ def costmapCallback(costMapMessage):
     costMap = costMapMessage
 
     receivedNewCostMap = True
+
+def scanCallback(scanMessage):
+    global obstacleEncountered
+
+    if min(scanMessage.ranges) < OBSTACLE_DETECTION_THRESHOLD:
+        obstacleEncountered = True
 
 #Processes the received map.
 def requestTrajectory(goalPos):
@@ -402,6 +410,7 @@ if __name__ == "__main__":
     global isNewTrajectoryReady
     global reachedGoal
     global abnormalTermination
+    global obstacleEncountered
 
     #Flag that indicate whether the local goal was defined
     global wasLocalGoalDefined
@@ -418,9 +427,11 @@ if __name__ == "__main__":
     receivedNewCostMap = True
     abnormalTermination = False
     exit = False
+    obstacleEncountered = False
 
     #Subscribe to map updates
     map_sub = rospy.Subscriber('/map', OccupancyGrid, mapCallback, queue_size=1)
+    scan_sub = rospy.Subscriber('/scan', LaserScan, scanCallback, queue_size=1)
     # costmap_sub = rospy.Subscriber('/move_base/local_costmap/costmap', OccupancyGrid, costmapCallback, queue_size=1)
     #Start requesting position in background
     Thread(target=request_pos_at_rate, name="Request_pos_at_rate Thread", args=[POS_REQUEST_RATE]).start()

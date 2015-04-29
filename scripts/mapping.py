@@ -529,7 +529,7 @@ class PathFinder:
                 if neighborValue in cellTypes:
                     notSurrounded = False
 
-            if notSurrounded and goalCellType == grid.getCellValue(current):
+            if notSurrounded:
                 return current
             else:
                 neighborValuePairs = grid.getNeighborValuePairs(current)
@@ -537,7 +537,7 @@ class PathFinder:
                 for neighborValuePair in neighborValuePairs:
                     (neighbor, neighborValue) = neighborValuePair
 
-                    if neighbor not in visited:
+                    if neighbor not in visited and neighborValue == goalCellType:
                         queue.put(neighbor, path_cost + 1)
                         visited.add(neighbor)
 
@@ -643,7 +643,7 @@ def getTrajectory(req):
     print "Getting waypoints...",
 
     #Meanwhile fine the path using A star in the main thread
-    waypoints = getWaypoints(req, grid)
+    waypoints = getWaypoints(req.initPos, req.goalPos, grid)
 
     print "DONE"
 
@@ -654,9 +654,9 @@ def getTrajectory(req):
     return TrajectoryResponse(waypoints)
 
 #TODO: possibly create a new class that will contain this service method
-def getWaypoints(req, grid):
-    startCell = convertPointToCell(req.initPos, grid.origin, grid.resolution)
-    goalCell = convertPointToCell(req.goalPos, grid.origin, grid.resolution)
+def getWaypoints(initPos, goalPos, grid):
+    startCell = convertPointToCell(initPos, grid.origin, grid.resolution)
+    goalCell = convertPointToCell(goalPos, grid.origin, grid.resolution)
 
     #Logic that gets the robot out of an obstacle (failure recovery)
     if grid.getCellValue(startCell) == CellType.Obstacle:
@@ -725,7 +725,7 @@ def getCentroid(req):
 
     grid = processOccupancyGrid(req.map, SCALE_FACTOR, True)
 
-    foundCentroid = True
+    foundCentroid = False
 
     visited = set()
     clusters = []
@@ -751,27 +751,42 @@ def getCentroid(req):
 
     if len(clusters) == 0:
         centroidPos = Point()
-        foundCentroid = False
 
         print "Centroid was not found!"
     else:
-        #Find the largest cluster in the list of clusters
-        (largestClusterIndex, largestCluster) = max(enumerate(clusters), key = lambda tup: len(tup[1]))
+        #Sort clusters by the number of elements in them in order to check the largest clusters first
+        clusters.sort(key = lambda tup: len(tup), reverse=True)
 
-        centroid = calculateCentroid(largestCluster)
-        centroidValue = grid.getCellValue(centroid)
+        for currentCluster in clusters:
+            centroid = calculateCentroid(currentCluster)
+            centroidValue = grid.getCellValue(centroid)
 
-        #if the centroid is inside the unexplored area or obstacle, then find the closest empty cell
-        if centroidValue == CellType.Obstacle or centroidValue == CellType.Unexplored:
-            path = PathFinder.findPathToCellWithValueClosestTo(grid, centroid, [CellType.Empty], (0, 0))
-            centroid = path.pop(len(path) - 1)
+            try:
+                #if the centroid is inside the unexplored area or obstacle, then find the closest empty cell
+                if centroidValue == CellType.Obstacle or centroidValue == CellType.Unexplored:
+                    path = PathFinder.findPathToCellWithValueClosestTo(grid, centroid, [CellType.Empty], (req.currentPos.x, req.currentPos.y))
+                    centroid = path.pop(len(path) - 1)
 
-        #if the centroid is on the border with the unexplored cell, then find the first empty cell that is not
-        centroid = PathFinder.findTheFirstCellNotSurroundedWith(grid, centroid, CellType.Empty, [CellType.Unexplored])
+                #if the centroid is on the border with the unexplored cell, then find the first empty cell that is not
+                centroid = PathFinder.findTheFirstCellNotSurroundedWith(grid, centroid, CellType.Empty, [CellType.Unexplored])
 
+                #Check if get trajectory will throw an error
+                centroidPos = convertCellToPoint(centroid, grid.cellOrigin, grid.resolution)
+
+                getWaypoints(req.currentPos, centroidPos, grid)
+            except Exception, e:
+                print "Exception thrown during the centroid processing: ", str(e)
+                print "Proceeding to the next cluster..."
+                continue
+            else:
+                foundCentroid = True
+                break
+
+        ########################################Printing##################################################
         clusterCells = []
         for cluster in clusters:
             clusterCells += cluster
+
 
         # print "Number of clusters: %d" % (len(clusters))
 
@@ -785,8 +800,7 @@ def getCentroid(req):
         publishGridCells(cluster_cell_pub, clusterCells, grid.resolution, grid.cellOrigin)
         publishGridCells(centroid_cell_pub, [centroid], grid.resolution, grid.cellOrigin)
         publishGridCells(empty_cell_pub, grid.empty, grid.resolution, grid.cellOrigin)
-
-        centroidPos = convertCellToPoint(centroid, grid.cellOrigin, grid.resolution)
+        publishGridCells(obstacle_cell_pub, grid.obstacles, grid.resolution, grid.cellOrigin)
 
     print "DONE"
 

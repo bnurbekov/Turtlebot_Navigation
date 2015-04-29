@@ -88,7 +88,7 @@ class RobotControl:
 
    #Goes to the desired position
     def goToPosition(self, speed, destination_x, destination_y):
-        yaw_control = PID(P=0.75, I=0.03, D=0.001, Derivator=0, Integrator=0, outMin=-1.3, outMax=1.3)
+        yaw_control = PID(P=0.8, I=0.05, D=0.001, Derivator=0, Integrator=0, outMin=-1.5, outMax=1.5)
 
         prev_destination_angle = math.atan2(destination_y - current_y, destination_x - current_x)
         initialDistance = math.sqrt((destination_x - current_x)**2 + (destination_y - current_y)**2)
@@ -255,8 +255,6 @@ def scanProcessing():
                 if not math.isnan(rangeValue) and rangeValue < minRange:
                     minRange = rangeValue
 
-            print minRange
-
             if minRange < OBSTACLE_DETECTION_THRESHOLD:
                 dest_angle = math.atan2(localGoalY - current_y, localGoalX - current_x)
                 # print "Dest angle: %f" % dest_angle
@@ -417,7 +415,8 @@ def exploreEnvironment():
         #2) Request new centroid
         print "2) Requesting new centroid."
         try:
-            centroidResponse = getCentroid(map)
+            currentPos = Point(x=current_x, y=current_y, z=0)
+            centroidResponse = getCentroid(map, currentPos)
         except rospy.ServiceException, e:
             print "getCentroid() call failed: %s" % e
             abnormalTermination = True

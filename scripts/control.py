@@ -130,7 +130,7 @@ class RobotControl:
 
     #Rotates to the specified angle in the global coordinate frame
     def rotateToAngle(self, destination_angle):
-        angular_vel = 0.4
+        angular_vel = 0.55
 
         if destination_angle > current_theta:
             if destination_angle - current_theta < math.pi:

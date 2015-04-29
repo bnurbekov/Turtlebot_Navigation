@@ -463,8 +463,9 @@ class PathFinder:
         queue = PriorityQueue()
         parent = {}
         queue.put(start, 0)
+        visited.add(start)
 
-        while queue:
+        while not queue.empty():
             tuple = heapq.heappop(queue.elements)
 
             path_cost = tuple[0]
@@ -511,8 +512,9 @@ class PathFinder:
         visited = set()
         queue = PriorityQueue()
         queue.put(start, 0)
+        visited.add(start)
 
-        while queue:
+        while not queue.empty():
             tuple = heapq.heappop(queue.elements)
 
             path_cost = tuple[0]

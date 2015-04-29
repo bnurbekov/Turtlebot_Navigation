@@ -529,7 +529,7 @@ class PathFinder:
                 if neighborValue in cellTypes:
                     notSurrounded = False
 
-            if notSurrounded:
+            if notSurrounded and goalCellType == grid.getCellValue(current):
                 return current
             else:
                 neighborValuePairs = grid.getNeighborValuePairs(current)
@@ -537,7 +537,7 @@ class PathFinder:
                 for neighborValuePair in neighborValuePairs:
                     (neighbor, neighborValue) = neighborValuePair
 
-                    if neighbor not in visited and neighborValue == goalCellType:
+                    if neighbor not in visited:
                         queue.put(neighbor, path_cost + 1)
                         visited.add(neighbor)
 

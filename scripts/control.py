@@ -21,7 +21,7 @@ POS_REQUEST_RATE = 30.0
 PROCESS_COSTMAP = False
 ROTATE_AROUND_GRANULARITY = 9
 LINEAR_VELOCITY = 0.15
-OBSTACLE_DETECTION_THRESHOLD = 0.5
+OBSTACLE_DETECTION_THRESHOLD = 0.75
 
 #Impelements PID controller
 class PID:
@@ -86,16 +86,20 @@ class RobotControl:
         print "Driving to: %f, %f" % (destination_x, destination_y)
         self.goToPosition(speed, destination_x, destination_y)
 
-    #Goes to the desired position
+   #Goes to the desired position
     def goToPosition(self, speed, destination_x, destination_y):
-        yaw_control = PID(P=5, I=0.01, D=0.001, Derivator=0, Integrator=0, outMin=-6, outMax=6)
+        yaw_control = PID(P=0.75, I=0.03, D=0.001, Derivator=0, Integrator=0, outMin=-1.3, outMax=1.3)
 
         prev_destination_angle = math.atan2(destination_y - current_y, destination_x - current_x)
+        initialDistance = math.sqrt((destination_x - current_x)**2 + (destination_y - current_y)**2)
+        initial_x = current_x
+        initial_y = current_y
 
         rate = rospy.Rate(self.update_rate)
 
-        while (current_x > destination_x + self.pos_tolerance or current_x < destination_x - self.pos_tolerance) \
-            or (current_y > destination_y + self.pos_tolerance or current_y < destination_y - self.pos_tolerance):
+        while ((current_x > destination_x + self.pos_tolerance or current_x < destination_x - self.pos_tolerance) \
+            or (current_y > destination_y + self.pos_tolerance or current_y < destination_y - self.pos_tolerance)) \
+            and not math.sqrt((current_x - initial_x)**2 + (current_y - initial_y)**2) > initialDistance:
             if isNewTrajectoryReady or obstacleEncountered:
                 break
 
@@ -148,11 +152,11 @@ class RobotControl:
     #Publishes twist
     def publishTwist(self, x_vel, angular_vel):
         twist = Twist()
-        twist.linear.x = x_vel;
-        twist.linear.y = 0;
+        twist.linear.x = x_vel
+        twist.linear.y = 0
         twist.linear.z = 0
-        twist.angular.x = 0;
-        twist.angular.y = 0;
+        twist.angular.x = 0
+        twist.angular.y = 0
         twist.angular.z = angular_vel
 
         self.publisher.publish(twist)
@@ -246,7 +250,14 @@ def scanProcessing():
         while not obstacleEncountered and wasLocalGoalDefined:
             scanMessage = scanMessageQueue.get()
 
-            if min(scanMessage.ranges) < OBSTACLE_DETECTION_THRESHOLD:
+            minRange = 9999
+            for rangeValue in scanMessage.ranges:
+                if not math.isnan(rangeValue) and rangeValue < minRange:
+                    minRange = rangeValue
+
+            print minRange
+
+            if minRange < OBSTACLE_DETECTION_THRESHOLD:
                 dest_angle = math.atan2(localGoalY - current_y, localGoalX - current_x)
                 # print "Dest angle: %f" % dest_angle
 
@@ -503,12 +514,6 @@ if __name__ == "__main__":
     print "Started exploration."
 
     # control = RobotControl(rospy.Publisher('/cmd_vel_mux/input/teleop', Twist, queue_size=5), POS_REQUEST_RATE, ROTATE_AROUND_GRANULARITY, ANGLE_TOLERANCE, POS_TOLERANCE)
-    #
-    # ROTATE_P = 3
-    # ROTATE_I = 0.1
-    # ROTATE_D = 0.2
-    # ROTATE_MAX = 3
-    #
     # control.rotate(math.pi)
 
     exploreEnvironment()

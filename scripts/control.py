@@ -16,7 +16,7 @@ WHEEL_RADIUS = 0.035
 DISTANCE_BETWEEN_WHEELS = 0.23
 ROBOT_RADIUS = 0.2
 POS_TOLERANCE = 0.02
-ANGLE_TOLERANCE = 0.01
+ANGLE_TOLERANCE = 0.05
 POS_REQUEST_RATE = 30.0
 PROCESS_COSTMAP = False
 ROTATE_AROUND_GRANULARITY = 9
@@ -65,21 +65,85 @@ class PID:
 
 #A class that is responsible for the robot control and publishing messages to the robot
 class RobotControl:
-    def __init__(self, publisher):
+    def __init__(self, publisher, update_rate, rotate_around_granularity, angle_tolerance, pos_tolerance):
         self.publisher = publisher
+        self.update_rate = update_rate
+        self.rotate_around_granularity = rotate_around_granularity
+        self.angle_tolerance = angle_tolerance
+        self.pos_tolerance = pos_tolerance
 
-    #Adds two angles
-    def addAngles(self, angle1, angle2):
-        result = angle1 + angle2
+    #Rotate 360 degrees
+    def rotateAround(self):
+        for i in range(0, self.rotate_around_granularity):
+            self.rotate(2 * math.pi/self.rotate_around_granularity)
 
-        if result > math.pi:
-            result %= math.pi
-            result -= math.pi
-        elif result < -math.pi:
-            result %= -math.pi
-            result += math.pi
+    #Commands the robot to go to the position specified
+    def goToPositionInAStraightLine(self, speed, destination_x, destination_y):
+        # adding current_theta is done in rotate(angle)
+        angle = math.atan2(destination_y - current_y, destination_x - current_x)
+        self.rotateToAngle(angle)
 
-        return result
+        print "Driving to: %f, %f" % (destination_x, destination_y)
+        self.goToPosition(speed, destination_x, destination_y)
+
+    #Goes to the desired position
+    def goToPosition(self, speed, destination_x, destination_y):
+        yaw_control = PID(P=5, I=0.01, D=0.001, Derivator=0, Integrator=0, outMin=-6, outMax=6)
+
+        prev_destination_angle = math.atan2(destination_y - current_y, destination_x - current_x)
+
+        rate = rospy.Rate(self.update_rate)
+
+        while (current_x > destination_x + self.pos_tolerance or current_x < destination_x - self.pos_tolerance) \
+            or (current_y > destination_y + self.pos_tolerance or current_y < destination_y - self.pos_tolerance):
+            if isNewTrajectoryReady or obstacleEncountered:
+                break
+
+            destination_angle = math.atan2(destination_y - current_y, destination_x - current_x)
+
+            #If there is a new set point, then reset the derivator and integrator
+            if destination_angle != prev_destination_angle:
+                prev_destination_angle = destination_angle
+                yaw_control.reset()
+
+            error = RobotControl.normalize_angle(destination_angle - current_theta)
+
+            feed = yaw_control.update(error)
+
+            self.publishTwist(speed, feed)
+
+            rate.sleep()
+
+        self.publishTwist(0, 0)
+
+    #Accepts an angle and makes the robot rotate around it.
+    def rotate(self, angle):
+        sum = current_theta + angle
+        destination_angle = RobotControl.normalize_angle(sum)
+
+        self.rotateToAngle(destination_angle)
+
+    #Rotates to the specified angle in the global coordinate frame
+    def rotateToAngle(self, destination_angle):
+        yaw_control = PID(P=0.5, I=0.01, D=0.001, Derivator=0, Integrator=0, outMin=-1, outMax=1)
+
+        error = RobotControl.normalize_angle(destination_angle - current_theta)
+
+        rate = rospy.Rate(self.update_rate)
+
+        while abs(error) > self.angle_tolerance:
+            if isNewTrajectoryReady or obstacleEncountered:
+                break
+
+            error = RobotControl.normalize_angle(destination_angle - current_theta)
+
+            feed = yaw_control.update(error)
+
+            self.publishTwist(0, feed)
+
+            rate.sleep()
+
+        self.publishTwist(0, 0)
 
     #Publishes twist
     def publishTwist(self, x_vel, angular_vel):
@@ -106,92 +170,6 @@ class RobotControl:
             self.publishTwist(x_vel, angular_vel)
 
         self.publishTwist(0, 0)
-
-    #This function accepts a speed and a distance for the robot to move in a straight line
-    def driveStraight(self, speed, distance):
-        startPos_x = current_x
-        startPos_y = current_y
-
-        while math.sqrt(math.pow(current_x - startPos_x, 2) + math.pow(current_y - startPos_y, 2)) < distance:
-            if isNewTrajectoryReady or obstacleEncountered:
-                break
-
-            self.publishTwist(speed, 0)
-
-            rospy.sleep(rospy.Duration(0, 1))
-
-        self.publishTwist(0, 0)
-
-    #Accepts an angle and makes the robot rotate around it.
-    def rotate(self, angle):
-        destination_angle = self.addAngles(current_theta, angle)
-
-        self.rotateToAngle(destination_angle)
-
-    #Rotates to the specified angle in the global coordinate frame
-    def rotateToAngle(self, destination_angle):
-        angular_vel = 0.55
-
-        if destination_angle > current_theta:
-            if destination_angle - current_theta < math.pi:
-                angular_vel_dir = 1
-            else:
-                angular_vel_dir = -1
-        else:
-            if current_theta - destination_angle < math.pi:
-                angular_vel_dir = -1
-            else:
-                angular_vel_dir = 1
-
-        while current_theta > destination_angle + ANGLE_TOLERANCE or current_theta < destination_angle - ANGLE_TOLERANCE:
-            if isNewTrajectoryReady or obstacleEncountered:
-                break
-
-            self.publishTwist(0, angular_vel_dir*angular_vel)
-
-            rospy.sleep(rospy.Duration(0, 1))
-
-        self.publishTwist(0, 0)
-
-    #Rotate 360 degrees
-    def rotateAround(self):
-        self.rotate(math.pi/2)
-        self.rotate(math.pi/2)
-        self.rotate(math.pi/2)
-        self.rotate(math.pi/2)
-
-    #This function works the same as rotate how ever it does not publish linear velocities.
-    def driveArc(self, radius, speed, angle):
-        angular_vel = speed / radius
-
-        if angle < 0:
-            angular_vel = -angular_vel
-
-        destination_angle = self.addAngles(current_theta, angle)
-
-        while current_theta > destination_angle + ANGLE_TOLERANCE or current_theta < destination_angle - ANGLE_TOLERANCE:
-            self.publishTwist(speed, angular_vel)
-
-            rospy.sleep(rospy.Duration(0, 1))
-
-        self.publishTwist(0, 0)
-
-    #Commands the robot to go to the position specified
-    def goToPosition(self, goalX, goalY):
-        global current_x
-        global current_y
-        global current_theta
-
-        xDiff = goalX - current_x
-        yDiff = goalY - current_y
-
-        # adding current_theta is done in rotate(angle)
-        angle = math.atan2(yDiff, xDiff)
-        self.rotateToAngle(angle)
-
-        distance = math.sqrt(pow(xDiff, 2) + pow(yDiff, 2))
-        print "Driving forward by distance: %f" % distance
-        self.driveStraight(.15, distance)
 
     #Normalizes angle, so that it only takes values in range [-pi, pi)
     @staticmethod
@@ -384,7 +362,7 @@ def executeTrajectory(control):
 
             wasLocalGoalDefined = True
 
-            control.goToPosition(localGoalX, localGoalY)
+            control.goToPositionInAStraightLine(LINEAR_VELOCITY, localGoalX, localGoalY)
 
             if obstacleEncountered:
                 print "Obstacle encountered! Rotating to let the map process the obstacle..."
@@ -410,7 +388,7 @@ def exploreEnvironment():
     global obstacleEncountered
 
     teleop_pub = rospy.Publisher('/cmd_vel_mux/input/teleop', Twist, queue_size=5)
-    control = RobotControl(teleop_pub)
+    control = RobotControl(teleop_pub, POS_REQUEST_RATE, ROTATE_AROUND_GRANULARITY, ANGLE_TOLERANCE, POS_TOLERANCE)
 
     while not rospy.is_shutdown() and not exit:
         if abnormalTermination:

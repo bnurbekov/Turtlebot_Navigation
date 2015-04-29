@@ -10,9 +10,11 @@ from std_msgs.msg import Bool
 from tf.transformations import euler_from_quaternion
 from sensor_msgs.msg import LaserScan
 from threading import Thread
+import Queue
 
 WHEEL_RADIUS = 0.035
 DISTANCE_BETWEEN_WHEELS = 0.23
+ROBOT_RADIUS = 0.2
 POS_TOLERANCE = 0.02
 ANGLE_TOLERANCE = 0.01
 POS_REQUEST_RATE = 30.0
@@ -111,7 +113,7 @@ class RobotControl:
         startPos_y = current_y
 
         while math.sqrt(math.pow(current_x - startPos_x, 2) + math.pow(current_y - startPos_y, 2)) < distance:
-            if isNewTrajectoryReady:
+            if isNewTrajectoryReady or obstacleEncountered:
                 break
 
             self.publishTwist(speed, 0)
@@ -128,7 +130,7 @@ class RobotControl:
 
     #Rotates to the specified angle in the global coordinate frame
     def rotateToAngle(self, destination_angle):
-        angular_vel = 0.7
+        angular_vel = 0.4
 
         if destination_angle > current_theta:
             if destination_angle - current_theta < math.pi:
@@ -142,7 +144,7 @@ class RobotControl:
                 angular_vel_dir = 1
 
         while current_theta > destination_angle + ANGLE_TOLERANCE or current_theta < destination_angle - ANGLE_TOLERANCE:
-            if isNewTrajectoryReady:
+            if isNewTrajectoryReady or obstacleEncountered:
                 break
 
             self.publishTwist(0, angular_vel_dir*angular_vel)
@@ -247,10 +249,65 @@ def costmapCallback(costMapMessage):
     receivedNewCostMap = True
 
 def scanCallback(scanMessage):
-    global obstacleEncountered
+    global scanMessageQueue
 
-    if min(scanMessage.ranges) < OBSTACLE_DETECTION_THRESHOLD:
-        obstacleEncountered = True
+    if not scanMessageQueue.empty():
+        scanMessageQueue.get()
+
+    scanMessageQueue.put(scanMessage)
+
+#Processes the scan message received
+def scanProcessing():
+    global obstacleEncountered
+    global wasLocalGoalDefined
+
+    while scanMessageQueue.empty():
+        rospy.sleep(0.1)
+
+    while not rospy.is_shutdown() and not exit:
+        while not obstacleEncountered and wasLocalGoalDefined:
+            scanMessage = scanMessageQueue.get()
+
+            if min(scanMessage.ranges) < OBSTACLE_DETECTION_THRESHOLD:
+                dest_angle = math.atan2(localGoalY - current_y, localGoalX - current_x)
+                # print "Dest angle: %f" % dest_angle
+
+                scanAngle_lowerBound = RobotControl.normalize_angle(current_theta + scanMessage.angle_min)
+                # print "ScanAngle_lowerBound: %f" % scanAngle_lowerBound
+                scanAngle_upperBound = RobotControl.normalize_angle(current_theta + scanMessage.angle_max)
+                # print "ScanAngle_upperBound: %f" % scanAngle_upperBound
+
+                diff1 = RobotControl.normalize_angle(scanAngle_upperBound - dest_angle)
+                diff2 = RobotControl.normalize_angle(dest_angle - scanAngle_lowerBound)
+
+                # print diff1, diff2, diff1 >= 0 and diff2 >= 0
+
+                if diff1 >= 0 and diff2 >= 0:
+                    # print "Angle is within lower and upper bounds!"
+
+                    dest_distance = math.sqrt((localGoalY - current_y)**2 + (localGoalX - current_x)**2)
+                    # print "Dest distance: %f" % dest_distance
+                    dest_angle_from_lower_bound = diff2
+                    # print "dest_angle_from_lower_bound: %f" % dest_angle_from_lower_bound
+                    # dest_angle_index = int(dest_angle_from_lower_bound/scanMessage.angle_increment)
+
+                    for i in range(0, len(scanMessage.ranges)):
+                        current_range = scanMessage.ranges[i]
+                        # print i, current_range
+                        if not math.isnan(current_range) and current_range < dest_distance:
+                            # print "Found that range that has index %d and value %f is less than dest_distance %f" % (i, current_range, dest_distance)
+
+                            current_angle = abs(RobotControl.normalize_angle(dest_angle_from_lower_bound - i * scanMessage.angle_increment))
+                            # print "Current angle: %f" % current_angle
+                            passage_width = current_range * math.sin(current_angle)
+                            # print "Passage width: %f" % passage_width
+
+                            if passage_width < ROBOT_RADIUS:
+                                # print "Obstacle encountered!"
+                                obstacleEncountered = True
+                                break
+
+        rospy.sleep(0.1)
 
 #Processes the received map.
 def requestTrajectory(goalPos):
@@ -309,6 +366,8 @@ def executeTrajectory(control):
     global localGoalX
     global localGoalY
     global wasLocalGoalDefined
+    global obstacleEncountered
+    global abnormalTermination
 
     #Wait for the initial trajectory
     while not isNewTrajectoryReady:
@@ -327,6 +386,12 @@ def executeTrajectory(control):
 
             control.goToPosition(localGoalX, localGoalY)
 
+            if obstacleEncountered:
+                print "Obstacle encountered! Rotating to let the map process the obstacle..."
+                reachedGoal = True # Just exit the execution of this trajectory to be able to navigate to a new goal
+                abnormalTermination = True
+                return
+
             if isNewTrajectoryReady:
                 break
 
@@ -335,18 +400,25 @@ def executeTrajectory(control):
 
             counter += 1
 
+    wasLocalGoalDefined = False
+
 #Executes the main task of exploring the world around
 def exploreEnvironment():
     global abnormalTermination
     global isNewTrajectoryReady
+    global wasLocalGoalDefined
+    global obstacleEncountered
 
     teleop_pub = rospy.Publisher('/cmd_vel_mux/input/teleop', Twist, queue_size=5)
     control = RobotControl(teleop_pub)
 
     while not rospy.is_shutdown() and not exit:
         if abnormalTermination:
+            #reset variables on abnormal termination
             abnormalTermination = False
             isNewTrajectoryReady = False
+            wasLocalGoalDefined = False
+            obstacleEncountered = False
 
         #1) Rotate 360 degrees to initially explore the world around
         print "=====> Started new iteration <====="
@@ -412,6 +484,8 @@ if __name__ == "__main__":
     global abnormalTermination
     global obstacleEncountered
 
+    obstacleEncountered = False
+
     #Flag that indicate whether the local goal was defined
     global wasLocalGoalDefined
 
@@ -429,12 +503,16 @@ if __name__ == "__main__":
     exit = False
     obstacleEncountered = False
 
+    global scanMessageQueue
+    scanMessageQueue = Queue.Queue()
+
     #Subscribe to map updates
     map_sub = rospy.Subscriber('/map', OccupancyGrid, mapCallback, queue_size=1)
     scan_sub = rospy.Subscriber('/scan', LaserScan, scanCallback, queue_size=1)
     # costmap_sub = rospy.Subscriber('/move_base/local_costmap/costmap', OccupancyGrid, costmapCallback, queue_size=1)
     #Start requesting position in background
     Thread(target=request_pos_at_rate, name="Request_pos_at_rate Thread", args=[POS_REQUEST_RATE]).start()
+    Thread(target=scanProcessing, name="Request_pos_at_rate Thread").start()
 
     print "Waiting for the initial position from tf...",
 

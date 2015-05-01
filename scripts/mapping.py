@@ -749,11 +749,9 @@ def getCentroid(req):
 
     print "Calculating centroid..."
 
-    if len(clusters) == 0:
-        centroidPos = Point()
+    centroidPos = Point()
 
-        print "Centroid was not found!"
-    else:
+    if len(clusters) != 0:
         #Sort clusters by the number of elements in them in order to check the largest clusters first
         clusters.sort(key = lambda tup: len(tup), reverse=True)
 

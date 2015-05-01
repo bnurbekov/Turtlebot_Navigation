@@ -129,7 +129,7 @@ class RobotControl:
 
     #Rotates to the specified angle in the global coordinate frame
     def rotateToAngle(self, destination_angle):
-        yaw_control = PID(P=0.5, I=0.01, D=0.001, Derivator=0, Integrator=0, outMin=-1, outMax=1)
+        yaw_control = PID(P=0.8, I=0.03, D=0.001, Derivator=0, Integrator=0, outMin=-1.3, outMax=1.3)
 
         error = RobotControl.normalize_angle(destination_angle - current_theta)
 

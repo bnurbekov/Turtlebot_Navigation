@@ -28,7 +28,7 @@
         <entry file="file://$PROJECT_DIR$/scripts/control.py">
           <provider selected="true" editor-type-id="text-editor">
             <state vertical-scroll-proportion="0.74067795" vertical-offset="3808" max-vertical-offset="7950">
-              <caret line="283" column="100" selection-start-line="283" selection-start-column="100" selection-end-line="283" selection-end-column="100" />
+              <caret line="283" column="106" selection-start-line="283" selection-start-column="106" selection-end-line="283" selection-end-column="106" />
               <folding>
                 <element signature="e#23#33#0" expanded="true" />
               </folding>
@@ -719,7 +719,7 @@
     <entry file="file://$PROJECT_DIR$/scripts/control.py">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.74067795" vertical-offset="3808" max-vertical-offset="7950">
-          <caret line="283" column="100" selection-start-line="283" selection-start-column="100" selection-end-line="283" selection-end-column="100" />
+          <caret line="283" column="106" selection-start-line="283" selection-start-column="106" selection-end-line="283" selection-end-column="106" />
           <folding>
             <element signature="e#23#33#0" expanded="true" />
           </folding>

@@ -281,7 +281,7 @@ def scanProcessing():
                     for i in range(0, len(scanMessage.ranges)):
                         current_range = scanMessage.ranges[i]
                         # print i, current_range
-                        if not math.isnan(current_range) and current_range < dest_distance:
+                        if not math.isnan(current_range) and current_range < (dest_distance + 0.15):
                             # print "Found that range that has index %d and value %f is less than dest_distance %f" % (i, current_range, dest_distance)
 
                             current_angle = abs(RobotControl.normalize_angle(dest_angle_from_lower_bound - i * scanMessage.angle_increment))

@@ -12,20 +12,25 @@ SCALE_FACTOR = 4
 
 #Class that implements priority queue.
 class PriorityQueue:
+    #Initializes priority queue
     def __init__(self):
         self.elements = []
 
+    #Checks if the queue is empty
     def empty(self):
         return len(self.elements) == 0
 
+    #Puts the item with the given priority into the priority queue
     def put(self, item, priority):
         heapq.heappush(self.elements, (priority, item))
 
+    #Pops the first item off the priority queue
     def get(self):
         return heapq.heappop(self.elements)[1]
 
 #Class that implements grid.
 class Grid:
+    #Initializes the grid
     def __init__(self, data, height, width, resolution, origin):
         self.height = height
         self.width = width
@@ -106,7 +111,9 @@ class Grid:
                 if cellType == value:
                     set.add(cell)
 
+#Class that implements occupancy grid
 class OccupancyGrid(Grid):
+    #Initializes occupancy grid
     def __init__(self, data, height, width, resolution, origin):
         Grid.__init__(self, data, height, width, resolution, origin)
 
@@ -304,10 +311,13 @@ class OccupancyGrid(Grid):
 
         return cost
 
+#Class that implements cost grid
 class CostGrid(Grid):
+    #Initializes occupancy grid
     def __init__(self, data, height, width, resolution, origin):
         Grid.__init__(self, data, height, width, resolution, origin)
 
+    #Scales the occupancy grid by the factor provided
     def scale(self, scaleFactor):
         if type(scaleFactor) != int:
             raise Exception("The scale factor should be an integer!")
@@ -380,7 +390,9 @@ class CostGrid(Grid):
         (x, y) = self.origin
         self.cellOrigin = (x + ng_resolution/2, y + ng_resolution/2)
 
+#Class that implements path finding functionality
 class PathFinder:
+    #Initializes PathFinder class
     def __init__(self, start, goal):
         self.frontier = PriorityQueue()
         self.parent = {}
@@ -421,6 +433,7 @@ class PathFinder:
 
         return False
 
+    #Finds path from goal to destination using internal parent list
     def findPath(self):
         self.path = PathFinder.getPath(self.start, self.goal, self.parent)
 
@@ -443,6 +456,7 @@ class PathFinder:
 
         self.waypoints.append(self.path[len(self.path) - 1])
 
+    #Static method that returns a path from goal to destination based on the parent list provided
     @staticmethod
     def getPath(start, goal, parent):
         path = []
@@ -457,6 +471,8 @@ class PathFinder:
 
         return path
 
+    #Finds a path to the cell with one of the values provided by goalCellValues. Additionally, tries to select the cell
+    #closest to the cell specified by goal argument during the tie-breaking process.
     @staticmethod
     def findPathToCellWithValueClosestTo(grid, start, goalCellValues, goal):
         visited = set()
@@ -507,6 +523,8 @@ class PathFinder:
                         parent[neighbor] = current
                         visited.add(neighbor)
 
+    #Finds the first cell not surrounded with the cell types specified by cellTypes argument. Performs the search only through
+    #the cells with goalCellType provided.
     @staticmethod
     def findTheFirstCellNotSurroundedWith(grid, start, goalCellType, cellTypes):
         visited = set()
@@ -558,6 +576,7 @@ def processOccupancyGrid(gridMessage, scaleFactor, cacheEmptyCells):
 
     return grid
 
+#Processes the received cost grid messsage.
 def processCostGrid(gridMessage, scaleFactor, result_queue):
     costGrid = CostGrid(gridMessage.data, gridMessage.info.height, gridMessage.info.width, gridMessage.info.resolution,
                 (gridMessage.info.origin.position.x, gridMessage.info.origin.position.y))
@@ -590,6 +609,7 @@ def convertCellToPoint(cell, cellOrigin, resolution):
 
     return point
 
+#Publishes grid cells contained in gridCellList to the topic specified by publisher argument.
 def publishGridCells(publisher, gridCellList, resolution, cellOrigin):
     gridCellsMessage = createGridCellsMessage(resolution)
 
@@ -611,6 +631,7 @@ def createGridCellsMessage(gridResolution):
 
     return gridCells
 
+#Service function that calculates trajectory for the robot to follow in order to get to the goal cell.
 def getTrajectory(req):
     global grid
 
@@ -653,7 +674,7 @@ def getTrajectory(req):
 
     return TrajectoryResponse(waypoints)
 
-#TODO: possibly create a new class that will contain this service method
+#Returns a list of waypoints after running A* algorithm to find a path from initPos to goalPos.
 def getWaypoints(initPos, goalPos, grid):
     startCell = convertPointToCell(initPos, grid.origin, grid.resolution)
     goalCell = convertPointToCell(goalPos, grid.origin, grid.resolution)
@@ -851,6 +872,7 @@ def expandCluster(cell, cluster, visited):
         for clusterCandidate in possibleClusterCandidates:
             expandCluster(clusterCandidate, cluster, visited)
 
+#Calculates a centroid of a given cluster.
 def calculateCentroid(cluster):
     centroidX = 0
     centroidY = 0
@@ -867,7 +889,7 @@ def calculateCentroid(cluster):
 
     return (centroidX, centroidY)
 
-# This is the program's main function
+#Main function
 if __name__ == '__main__':
     # Change this node name to include your username
     rospy.init_node('mapping')

@@ -25,6 +25,7 @@ OBSTACLE_DETECTION_THRESHOLD = 0.75
 
 #Impelements PID controller
 class PID:
+    #Initializes PID
     def __init__(self, P=1, I=0.0001, D=0.001, Derivator=0, Integrator=0, outMax=3, outMin=-3):
         self.Kp = P
         self.Ki = I
@@ -34,6 +35,7 @@ class PID:
         self.outMax = outMax
         self.outMin = outMin
 
+    #Updates pid based on the error provided
     def update(self, error):
         self.P_value = self.Kp * error
         self.D_value = self.Kd * (error - self.Derivator)
@@ -230,6 +232,7 @@ def costmapCallback(costMapMessage):
 
     receivedNewCostMap = True
 
+#The callback function that updates the scan message
 def scanCallback(scanMessage):
     global scanMessageQueue
 
@@ -432,6 +435,7 @@ def exploreEnvironment():
         navigateToGoal(control, centroidResponse.centroid)
         print "======>   Ended iteration   <====="
 
+#Navigates the robot to the goal position
 def navigateToGoal(control, goal):
     global reachedGoal
 
@@ -440,6 +444,7 @@ def navigateToGoal(control, goal):
     Thread(target=requestTrajectory, name="requestTrajectory() Thread", args=[goal]).start()
     executeTrajectory(control)
 
+#Main function
 if __name__ == "__main__":
     #Initialize the new node
     rospy.init_node('control')

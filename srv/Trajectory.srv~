@@ -1,7 +1,0 @@
-geometry_msgs/Point initPos
-geometry_msgs/Point goalPos
-nav_msgs/OccupancyGrid map
-std_msgs/Bool processCostMap
-nav_msgs/OccupancyGrid costMap
----
-nav_msgs/Path path

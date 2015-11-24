@@ -1,7 +1,9 @@
-#####Synopsis
+Synopsis
+========
 This project implements a Software system for navigation and frontier based exploration for mobile robotic platforms (Turtlebots).
 
-#####Installation
+Installation
+============
 Save this package into catkin_ws/src/.
 
 Run gazebo simulation by running 'roslaunch turtlebot_gazebo turtlebot_world.launch' or bringing up the actual turtlebot.

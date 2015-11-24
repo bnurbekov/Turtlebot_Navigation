@@ -1,4 +1,9 @@
-To run this code,
+Synopsis
+========
+This project implements a Software system for navigation and frontier based exploration for mobile robotic platforms (Turtlebots).
+
+Installation
+============
 
 Save this package into catkin_ws/src/.
 

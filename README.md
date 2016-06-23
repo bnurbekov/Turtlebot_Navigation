@@ -7,12 +7,12 @@ Description
 First of all, Turtlebots are small robots that can drive around and sense the environment through a Kinect sensor.  
 One of them is shown below.
 
-<img src="https://github.com/bnurbekov/FrontierBasedExplorationAndNavigation/blob/master/Turtlebot.jpg" width="400" align="middle">
+<img src="https://github.com/bnurbekov/FrontierBasedExplorationAndNavigation/blob/master/Turtlebot.jpg" width="450">
 
 In general, the purpose of the project was to build an informed search algorithm on a grid (shown below), so that the robot could explore the environment. 
 The robot had to be able to locate borders of the unexplored zones (shown in orange) and find a path to those borders using an A* search. After that, the goal was to drive to the borders in order to explore those zones by spinning in one place.
 
-<img src="https://github.com/bnurbekov/FrontierBasedExplorationAndNavigation/blob/master/Exploration.png" width="400">
+<img src="https://github.com/bnurbekov/FrontierBasedExplorationAndNavigation/blob/master/Exploration.png" width="450">
 
 (Explored cells are shown in white; expanded obstacles are shown in black; unexplored zone borders are shown in orange)
 

@@ -7,6 +7,7 @@ Description
 Description: First of all, Turtlebots are small robots that can drive around and sense the environment through a Kinect sensor.  
 One of them is shown below.
 
+<img src="https://github.com/bnurbekov/FrontierBasedExplorationAndNavigation/blob/master/Turtlebot.jpg" width="250">
 ![Turtlebot](https://github.com/bnurbekov/FrontierBasedExplorationAndNavigation/blob/master/Turtlebot.jpg){: width=250px}
 
 In general, the purpose of the project was to build an informed search algorithm on a grid (shown below), so that the robot could explore the environment. 

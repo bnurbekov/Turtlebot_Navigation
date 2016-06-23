@@ -4,7 +4,7 @@ This project implements a Software system for navigation and frontier based expl
 
 Description
 ========
-Description: First of all, Turtlebots are small robots that can drive around and sense the environment through a Kinect sensor.  
+First of all, Turtlebots are small robots that can drive around and sense the environment through a Kinect sensor.  
 One of them is shown below.
 
 <img src="https://github.com/bnurbekov/FrontierBasedExplorationAndNavigation/blob/master/Turtlebot.jpg" width="400" align="middle">
@@ -18,7 +18,13 @@ The robot had to be able to locate borders of the unexplored zones (shown in ora
 
 The project is interesting from the software engineering stand-point because it is very high-level (no low-level robotics involved), allowing to practice search algorithms, such as BFS, DFS and A*, and performance optimization techniques, such as multi-threading.  
 
-Outcome: The robot was able to successfully explore the environment.
+Outcome
+============
+The robot was able to successfully explore the environment.
+
+Directions
+============
+The main files to look for are "scripts/mapping.py" and "scripts/control.py".​ Installation instructions are located in the repository.
 
 Installation
 ============
